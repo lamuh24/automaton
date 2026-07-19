@@ -69,6 +69,8 @@ Usage:
 Environment:
   CONWAY_API_URL           Conway API URL (default: https://api.conway.tech)
   CONWAY_API_KEY           Conway API key (overrides config)
+  OPENAI_API_KEY           Direct OpenAI key (overrides config; enables GPT-5.6)
+  ANTHROPIC_API_KEY        Direct Anthropic key (overrides config)
   OLLAMA_BASE_URL          Ollama base URL (overrides config, e.g. http://localhost:11434)
 `);
     process.exit(0);
@@ -290,8 +292,8 @@ async function run(): Promise<void> {
     defaultModel: config.inferenceModel,
     maxTokens: config.maxTokensPerTurn,
     lowComputeModel: config.modelStrategy?.lowComputeModel || "gpt-5-mini",
-    openaiApiKey: config.openaiApiKey,
-    anthropicApiKey: config.anthropicApiKey,
+    openaiApiKey: process.env.OPENAI_API_KEY || config.openaiApiKey,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || config.anthropicApiKey,
     ollamaBaseUrl,
     getModelProvider: (modelId) => modelRegistry.get(modelId)?.provider,
   });

@@ -131,6 +131,18 @@ export function createConfig(params: {
   chainType?: ChainType;
 }): AutomatonConfig {
   const normalizedSandboxId = (params.sandboxId || "").trim();
+  const directOpenAI = Boolean(params.openaiApiKey || process.env.OPENAI_API_KEY);
+  const inferenceModel = directOpenAI
+    ? "gpt-5.6-sol"
+    : (DEFAULT_CONFIG.inferenceModel || "gpt-5.2");
+  const modelStrategy: ModelStrategyConfig = directOpenAI
+    ? {
+        ...DEFAULT_MODEL_STRATEGY_CONFIG,
+        inferenceModel: "gpt-5.6-sol",
+        lowComputeModel: "gpt-5.6-terra",
+        criticalModel: "gpt-5.6-luna",
+      }
+    : DEFAULT_MODEL_STRATEGY_CONFIG;
   return {
     name: params.name,
     genesisPrompt: params.genesisPrompt,
@@ -144,7 +156,7 @@ export function createConfig(params: {
     openaiApiKey: params.openaiApiKey,
     anthropicApiKey: params.anthropicApiKey,
     ollamaBaseUrl: params.ollamaBaseUrl,
-    inferenceModel: DEFAULT_CONFIG.inferenceModel || "gpt-5.2",
+    inferenceModel,
     maxTokensPerTurn: DEFAULT_CONFIG.maxTokensPerTurn || 4096,
     heartbeatConfigPath:
       DEFAULT_CONFIG.heartbeatConfigPath || "~/.automaton/heartbeat.yml",
@@ -156,6 +168,7 @@ export function createConfig(params: {
     maxChildren: DEFAULT_CONFIG.maxChildren || 3,
     parentAddress: params.parentAddress,
     treasuryPolicy: params.treasuryPolicy ?? DEFAULT_TREASURY_POLICY,
+    modelStrategy,
     chainType: params.chainType || "evm",
   };
 }

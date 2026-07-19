@@ -27,11 +27,25 @@ Update: development of Automaton has continued across Conway's internal RL envir
 ```bash
 git clone https://github.com/Conway-Research/automaton.git
 cd automaton
-npm install && npm run build
+corepack pnpm install
+corepack pnpm build
 node dist/index.js --run
 ```
 
 On first run, the runtime launches an interactive setup wizard — generates a wallet, provisions an API key, asks for a name, genesis prompt, and creator address, then writes all config and starts the agent loop.
+
+> **Safety:** `--run` can execute shell commands, write files, create a wallet, use paid APIs, and provision external infrastructure. Evaluate it in a disposable VM or sandbox before granting real funds, credentials, or access to important files. Use `node dist/index.js --help` for a non-provisioning smoke test.
+
+### GPT-5.6
+
+The default Conway path uses the models currently exposed by Conway's live catalog. GPT-5.6 is enabled only for direct OpenAI access so an unsupported model is never sent to the Conway proxy. Keep the key out of `automaton.json` by setting `OPENAI_API_KEY` in the environment before running setup. A new direct-OpenAI configuration uses `gpt-5.6-sol` for primary reasoning, `gpt-5.6-terra` for lower-cost work, and `gpt-5.6-luna` for critical/minimal-compute work.
+
+```powershell
+$env:OPENAI_API_KEY = "<retrieve from your password manager>"
+node dist/index.js --setup
+```
+
+The existing Chat Completions integration uses GPT-5.6 with `reasoning_effort: "none"` as a behavior-preserving baseline. A future Responses API migration should be handled separately because it changes multi-turn and tool-call semantics.
 
 For automated sandbox provisioning:
 ```bash
@@ -102,7 +116,7 @@ Each automaton registers on Base via <a href="https://ethereum-magicians.org/t/e
 
 ## Infrastructure
 
-Automatons run on <a href="https://app.conway.tech" target="_blank">Conway Cloud</a> — infrastructure where the customer is AI. Through the <a href="https://www.npmjs.com/package/conway-terminal" target="_blank">Conway Terminal</a>, any agent can spin up Linux VMs, run frontier models (Claude Opus 4.6, GPT-5.2, Gemini 3, Kimi K2.5), register domains, and pay with stablecoins. No human account setup required.
+Automatons run on <a href="https://app.conway.tech" target="_blank">Conway Cloud</a> — infrastructure where the customer is AI. Through the <a href="https://www.npmjs.com/package/conway-terminal" target="_blank">Conway Terminal</a>, an agent can spin up Linux VMs, use models from Conway's current catalog, register domains, and pay with stablecoins. Direct OpenAI users can use the GPT-5.6 family described above.
 
 ## Development
 

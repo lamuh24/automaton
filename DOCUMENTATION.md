@@ -57,10 +57,12 @@ This clones the repo, builds, and launches the setup wizard inside a Conway sand
 ```bash
 git clone https://github.com/Conway-Research/automaton.git
 cd automaton
-pnpm install
-pnpm build
+corepack pnpm install
+corepack pnpm build
 node dist/index.js --run
 ```
+
+Run `node dist/index.js --help` first if you only want to verify the installation. The `--run` command starts an agent with shell, filesystem, wallet, network, and potentially paid-infrastructure capabilities; use a disposable VM or sandbox for evaluation.
 
 On first run, the interactive setup wizard walks you through wallet generation, API key provisioning, naming, genesis prompt, and financial safety configuration.
 
@@ -915,8 +917,16 @@ Agents can leave on-chain feedback for each other:
 ### Supported backends
 
 1. **Conway proxy** (default) — routes through `api.conway.tech`, billed from credits
-2. **OpenAI direct** — uses BYOK OpenAI API key (sk-...)
-3. **Anthropic direct** — uses BYOK Anthropic API key (sk-ant-...)
+2. **OpenAI direct** — uses `OPENAI_API_KEY` (preferred) or a configured BYOK key
+3. **Anthropic direct** — uses `ANTHROPIC_API_KEY` (preferred) or a configured BYOK key
+
+### GPT-5.6 compatibility
+
+- Conway mode keeps the live Conway-supported catalog; it does not assume GPT-5.6 is available through the proxy.
+- Direct OpenAI mode defaults new configurations to `gpt-5.6-sol`, with `gpt-5.6-terra` as the lower-cost tier and `gpt-5.6-luna` as the critical tier.
+- GPT-5.6 Chat Completions requests use `max_completion_tokens` and explicitly set `reasoning_effort` to `none` for compatibility with the prior non-reasoning baseline.
+- Set provider keys in environment variables before setup and press Enter at the key prompts to avoid persisting them in the configuration file.
+- The Responses API is the preferred future path for richer multi-turn reasoning and tool workflows, but that migration is intentionally separate from this compatibility update.
 
 ### Model selection
 
@@ -1094,7 +1104,7 @@ The bootstrap topup attempts to buy $5 credits from USDC automatically on startu
 ### Inference errors
 
 **Model not available:**
-Check available models with `list_models`. The default is `gpt-5.2`. If using BYOK keys, ensure they're valid.
+Check available models with `list_models`. Conway mode defaults to its supported GPT-5.2 family; a new direct-OpenAI setup defaults to the GPT-5.6 family. If using BYOK keys, ensure they are available through environment variables or valid configuration.
 
 **Rate limited:**
 The resilient HTTP client retries on 429 with exponential backoff (up to 3 retries).

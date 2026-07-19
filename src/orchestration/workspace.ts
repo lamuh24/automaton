@@ -41,8 +41,9 @@ export class AgentWorkspace implements AgentWorkspace {
     }
 
     this.goalId = normalizedGoalId;
+    const automatonHome = process.env.AUTOMATON_HOME || os.homedir();
     this.basePath = path.resolve(
-      basePath ?? path.join(os.homedir(), ".automaton", "workspace", normalizedGoalId),
+      basePath ?? path.join(automatonHome, ".automaton", "workspace", normalizedGoalId),
     );
 
     this.outputsPath = path.join(this.basePath, "outputs");

@@ -171,8 +171,8 @@ function val(v: string | number | boolean | undefined): string {
 
 function printMainMenu(config: AutomatonConfig): void {
   const providers = [
-    config.openaiApiKey ? "OpenAI" : null,
-    config.anthropicApiKey ? "Anthropic" : null,
+    (process.env.OPENAI_API_KEY || config.openaiApiKey) ? "OpenAI" : null,
+    (process.env.ANTHROPIC_API_KEY || config.anthropicApiKey) ? "Anthropic" : null,
     config.ollamaBaseUrl ? "Ollama" : null,
     "Conway",
   ].filter(Boolean).join(", ");
@@ -203,8 +203,18 @@ async function configureProviders(config: AutomatonConfig): Promise<void> {
     config.conwayApiKey,
   );
 
-  config.openaiApiKey = await askString("OpenAI API key  (sk-...)", config.openaiApiKey) || undefined;
-  config.anthropicApiKey = await askString("Anthropic API key  (sk-ant-...)", config.anthropicApiKey) || undefined;
+  config.openaiApiKey = await askString(
+    process.env.OPENAI_API_KEY
+      ? "OpenAI API key  (OPENAI_API_KEY detected; Enter keeps it out of config)"
+      : "OpenAI API key  (sk-...)",
+    config.openaiApiKey,
+  ) || undefined;
+  config.anthropicApiKey = await askString(
+    process.env.ANTHROPIC_API_KEY
+      ? "Anthropic API key  (ANTHROPIC_API_KEY detected; Enter keeps it out of config)"
+      : "Anthropic API key  (sk-ant-...)",
+    config.anthropicApiKey,
+  ) || undefined;
   config.ollamaBaseUrl = await askString("Ollama base URL  (http://localhost:11434)", config.ollamaBaseUrl) || undefined;
 
   console.log("");
@@ -228,7 +238,9 @@ async function configureModelStrategy(config: AutomatonConfig): Promise<void> {
     await discoverOllamaModels(ollamaBaseUrl, db.raw);
   }
 
-  const models = registry.getAll().filter((m) => m.enabled);
+  const models = registry.getAll().filter(
+    (m) => m.enabled && (!m.modelId.startsWith("gpt-5.6") || Boolean(process.env.OPENAI_API_KEY || config.openaiApiKey)),
+  );
   db.close();
 
   const s: ModelStrategyConfig = {

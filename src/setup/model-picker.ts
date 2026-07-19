@@ -43,7 +43,9 @@ export async function runModelPicker(): Promise<void> {
     await discoverOllamaModels(ollamaBaseUrl, db.raw);
   }
 
-  const models = registry.getAll().filter((m) => m.enabled);
+  const models = registry.getAll().filter(
+    (m) => m.enabled && (!m.modelId.startsWith("gpt-5.6") || Boolean(process.env.OPENAI_API_KEY || config.openaiApiKey)),
+  );
 
   if (models.length === 0) {
     console.log(chalk.yellow("  No models available in registry."));

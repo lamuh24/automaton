@@ -62,7 +62,10 @@ import { LocalWorkerPool } from "../orchestration/local-worker.js";
 import { SimpleAgentTracker, SimpleFundingProtocol } from "../orchestration/simple-tracker.js";
 import { HarnessRegistry } from "./harness-registry.js";
 import { createWorkerInferenceBridge } from "./worker-inference-bridge.js";
-import { ProviderRegistry } from "../inference/provider-registry.js";
+import {
+  CONWAY_FALLBACK_MODELS,
+  ProviderRegistry,
+} from "../inference/provider-registry.js";
 import { UnifiedInferenceClient } from "../inference/inference-client.js";
 import { isIdleOnlyTool } from "./idle-only-tools.js";
 
@@ -149,9 +152,21 @@ export async function runAgentLoop(
       if (config.conwayApiKey && !process.env.CONWAY_API_KEY) {
         process.env.CONWAY_API_KEY = config.conwayApiKey;
       }
-      // If no OpenAI key is set but Conway key is available, use Conway as
-      // the OpenAI provider (Conway Compute is OpenAI API-compatible).
-      if (!process.env.OPENAI_API_KEY && config.conwayApiKey) {
+      // ProviderRegistry reads keys from the environment. Bridge legacy
+      // persisted BYOK config into that registry, while still preferring an
+      // explicit environment variable.
+      const directOpenAIKey = process.env.OPENAI_API_KEY || config.openaiApiKey;
+      if (directOpenAIKey) {
+        process.env.OPENAI_API_KEY = directOpenAIKey;
+      }
+      if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {
+        process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
+      }
+
+      // If no direct OpenAI key is set but Conway is available, use Conway as
+      // the OpenAI-compatible provider.
+      const usingConwayInferenceFallback = !directOpenAIKey && Boolean(config.conwayApiKey);
+      if (usingConwayInferenceFallback) {
         process.env.OPENAI_API_KEY = config.conwayApiKey;
         process.env.OPENAI_BASE_URL = `${config.conwayApiUrl}/v1`;
       }
@@ -167,6 +182,11 @@ export async function runAgentLoop(
       // provider's baseUrl so the OpenAI client points to Conway Compute.
       if (process.env.OPENAI_BASE_URL) {
         registry.overrideBaseUrl("openai", process.env.OPENAI_BASE_URL);
+      }
+      if (usingConwayInferenceFallback) {
+        // Conway currently exposes GPT-5.2/mini/nano, not the GPT-5.6 family.
+        // Keep orchestration usable instead of sending unsupported model IDs.
+        registry.overrideModels("openai", CONWAY_FALLBACK_MODELS);
       }
 
       const unifiedInference = new UnifiedInferenceClient(registry);

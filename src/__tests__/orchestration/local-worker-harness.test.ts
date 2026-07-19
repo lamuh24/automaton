@@ -292,8 +292,8 @@ describe("orchestration/LocalWorkerPool harness integration", () => {
       maxRetries: 0,
     });
 
-    const originalHome = process.env.HOME;
-    process.env.HOME = tempHome;
+    const originalAutomatonHome = process.env.AUTOMATON_HOME;
+    process.env.AUTOMATON_HOME = tempHome;
     try {
       const pool = new LocalWorkerPool({
         db,
@@ -307,7 +307,11 @@ describe("orchestration/LocalWorkerPool harness integration", () => {
 
       await (pool as any).runWorker("worker-test", task, new AbortController().signal);
     } finally {
-      process.env.HOME = originalHome;
+      if (originalAutomatonHome === undefined) {
+        delete process.env.AUTOMATON_HOME;
+      } else {
+        process.env.AUTOMATON_HOME = originalAutomatonHome;
+      }
     }
 
     const row = getTaskById(db, task.id);

@@ -228,7 +228,7 @@ export class UnifiedInferenceClient {
     params: SharedChatParams,
   ): Promise<UnifiedInferenceResult> {
     const startedAt = Date.now();
-    const payload = this.buildChatCompletionRequest(model.id, params);
+    const payload = this.buildChatCompletionRequest(providerId, model.id, params);
     if (params.stream) {
       const stream = await client.chat.completions.create({
         ...payload,
@@ -271,7 +271,11 @@ export class UnifiedInferenceClient {
     });
   }
 
-  private buildChatCompletionRequest(modelId: string, params: SharedChatParams): Record<string, unknown> {
+  private buildChatCompletionRequest(
+    providerId: string,
+    modelId: string,
+    params: SharedChatParams,
+  ): Record<string, unknown> {
     const payload: Record<string, unknown> = {
       model: modelId,
       messages: params.messages.map((message) => ({
@@ -288,7 +292,15 @@ export class UnifiedInferenceClient {
     }
 
     if (params.maxTokens !== undefined) {
-      payload.max_tokens = params.maxTokens;
+      if (providerId === "openai" && /^gpt-5\.6(?:-|$)/.test(modelId)) {
+        payload.max_completion_tokens = params.maxTokens;
+      } else {
+        payload.max_tokens = params.maxTokens;
+      }
+    }
+
+    if (providerId === "openai" && /^gpt-5\.6(?:-|$)/.test(modelId)) {
+      payload.reasoning_effort = "none";
     }
 
     if (params.tools && params.tools.length > 0) {

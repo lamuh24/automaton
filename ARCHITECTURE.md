@@ -380,7 +380,7 @@ InferenceRouter.route(request)
   8. Return result with cost metadata
 ```
 
-**Routing matrix:** Maps `SurvivalTier x InferenceTaskType -> ModelPreference[]`. In `normal`/`high` tiers, uses capable models (gpt-5.2). In `low_compute`, downgrades to cheaper models. In `critical`, uses the cheapest available.
+**Routing matrix:** Maps `SurvivalTier x InferenceTaskType -> ModelPreference[]`. Conway mode uses the supported GPT-5.2 family. Direct OpenAI mode uses GPT-5.6 Sol for capable reasoning, Terra for lower-cost work, and Luna for critical/minimal-compute work. Provider-specific model catalogs prevent unsupported OpenAI models from being sent to the Conway proxy.
 
 **Model registry:** DB-backed catalog of available models with provider, pricing, and capability metadata. Refreshed from Conway API via heartbeat. Seeds with baseline models on startup (upsert, not seed-once).
 
@@ -696,9 +696,9 @@ AutomatonConfig
   sandboxId               Conway sandbox ID (empty = local mode)
   conwayApiUrl            Conway API URL (default: https://api.conway.tech)
   conwayApiKey            SIWE-provisioned API key
-  openaiApiKey            Optional BYOK OpenAI key
-  anthropicApiKey         Optional BYOK Anthropic key
-  inferenceModel          Default model (default: gpt-5.2)
+  openaiApiKey            Optional persisted BYOK OpenAI key (OPENAI_API_KEY preferred)
+  anthropicApiKey         Optional persisted BYOK Anthropic key (ANTHROPIC_API_KEY preferred)
+  inferenceModel          Provider-aware default (Conway: gpt-5.2; direct OpenAI: gpt-5.6-sol)
   maxTokensPerTurn        Max tokens per inference call (default: 4096)
   heartbeatConfigPath     Path to heartbeat.yml
   dbPath                  Path to SQLite database

@@ -27,6 +27,78 @@ export interface ModelConfig {
   supportsStreaming: boolean;
 }
 
+export const OPENAI_GPT56_MODELS: ModelConfig[] = [
+  {
+    id: "gpt-5.6-sol",
+    tier: "reasoning",
+    contextWindow: 1_050_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 5,
+    costPerOutputToken: 30,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+  {
+    id: "gpt-5.6-terra",
+    tier: "fast",
+    contextWindow: 1_050_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 2.5,
+    costPerOutputToken: 15,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+  {
+    id: "gpt-5.6-luna",
+    tier: "cheap",
+    contextWindow: 1_050_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 1,
+    costPerOutputToken: 6,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+];
+
+export const CONWAY_FALLBACK_MODELS: ModelConfig[] = [
+  {
+    id: "gpt-5.2",
+    tier: "reasoning",
+    contextWindow: 400_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 2.275,
+    costPerOutputToken: 18.2,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+  {
+    id: "gpt-5-mini",
+    tier: "fast",
+    contextWindow: 400_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 0.325,
+    costPerOutputToken: 2.6,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+  {
+    id: "gpt-5-nano",
+    tier: "cheap",
+    contextWindow: 400_000,
+    maxOutputTokens: 128_000,
+    costPerInputToken: 0.065,
+    costPerOutputToken: 0.52,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+  },
+];
+
 export interface ResolvedModel {
   provider: ProviderConfig;
   model: ModelConfig;
@@ -75,6 +147,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     baseUrl: "https://api.openai.com/v1",
     apiKeyEnvVar: "OPENAI_API_KEY",
     models: [
+      ...OPENAI_GPT56_MODELS,
       {
         id: "gpt-4.1",
         tier: "reasoning",
@@ -266,6 +339,13 @@ export class ProviderRegistry {
     const provider = this.providers.find((p) => p.id === providerId);
     if (provider) {
       provider.baseUrl = baseUrl;
+    }
+  }
+
+  overrideModels(providerId: string, models: ModelConfig[]): void {
+    const provider = this.providers.find((p) => p.id === providerId);
+    if (provider) {
+      provider.models = models.map((model) => ({ ...model }));
     }
   }
 

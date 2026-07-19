@@ -123,7 +123,7 @@ describe("UnifiedInferenceClient", () => {
 
     expect(result.content).toBe("reasoning-response");
     expect(result.metadata.providerId).toBe("openai");
-    expect(result.metadata.modelId).toBe("gpt-4.1");
+    expect(result.metadata.modelId).toBe("gpt-5.6-sol");
     expect(result.metadata.tier).toBe("reasoning");
   });
 
@@ -402,9 +402,9 @@ describe("UnifiedInferenceClient", () => {
 
     const result = await client.chat({ tier: "reasoning", messages: BASE_MESSAGES });
     expect(result.usage).toEqual({ inputTokens: 2000, outputTokens: 500, totalTokens: 2500 });
-    expect(result.cost.inputCostCredits).toBeCloseTo(4); // 2k * 2.0 / 1k
-    expect(result.cost.outputCostCredits).toBeCloseTo(4); // 0.5k * 8.0 / 1k
-    expect(result.cost.totalCostCredits).toBeCloseTo(8);
+    expect(result.cost.inputCostCredits).toBeCloseTo(10); // 2k * 5.0 / 1k
+    expect(result.cost.outputCostCredits).toBeCloseTo(15); // 0.5k * 30.0 / 1k
+    expect(result.cost.totalCostCredits).toBeCloseTo(25);
   });
 
   it("extracts text content from structured content arrays", async () => {
@@ -552,5 +552,25 @@ describe("UnifiedInferenceClient", () => {
       response_format: { type: "json_object" },
     });
     expect(Array.isArray(payload.tools)).toBe(true);
+  });
+
+  it("preserves the GPT-5.6 Chat Completions baseline", async () => {
+    const client = createClient();
+    queueCompletion({ content: "gpt-5.6" });
+
+    await client.chat({
+      tier: "reasoning",
+      messages: BASE_MESSAGES,
+      maxTokens: 512,
+      tools: [{ type: "function", function: { name: "inspect", parameters: {} } }],
+    });
+
+    const payload = mockState.calls.at(-1);
+    expect(payload).toMatchObject({
+      model: "gpt-5.6-sol",
+      max_completion_tokens: 512,
+      reasoning_effort: "none",
+    });
+    expect(payload.max_tokens).toBeUndefined();
   });
 });

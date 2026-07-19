@@ -166,7 +166,26 @@ describe("ProviderRegistry", () => {
     const resolved = registry.resolveModel("reasoning");
 
     expect(resolved.provider.id).toBe("openai");
-    expect(resolved.model.id).toBe("gpt-4.1");
+    expect(resolved.model.id).toBe("gpt-5.6-sol");
+  });
+
+  it("can replace OpenAI models with the live Conway fallback catalog", () => {
+    const registry = createRegistryFromDefaults();
+    registry.overrideModels("openai", [
+      {
+        id: "gpt-5.2",
+        tier: "reasoning",
+        contextWindow: 400000,
+        maxOutputTokens: 128000,
+        costPerInputToken: 2.275,
+        costPerOutputToken: 18.2,
+        supportsTools: true,
+        supportsVision: true,
+        supportsStreaming: true,
+      },
+    ]);
+
+    expect(registry.resolveModel("reasoning").model.id).toBe("gpt-5.2");
   });
 
   it("resolveModel returns fast model from default tier", () => {

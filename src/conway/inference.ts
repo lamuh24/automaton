@@ -89,6 +89,14 @@ export function createInferenceClient(
       body.max_tokens = tokenLimit;
     }
 
+    // GPT-5.2 effectively used no reasoning by default. GPT-5.6 defaults to
+    // medium, so preserve the existing Chat Completions latency/tool contract
+    // for a behavior-safe baseline. Reasoning + tools should migrate to the
+    // Responses API as a separate, measured change.
+    if (backend === "openai" && /^gpt-5\.6(?:-|$)/.test(model)) {
+      body.reasoning_effort = "none";
+    }
+
     if (opts?.temperature !== undefined) {
       body.temperature = opts.temperature;
     }

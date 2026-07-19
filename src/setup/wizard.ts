@@ -97,12 +97,20 @@ export async function runSetupWizard(): Promise<AutomatonConfig> {
   console.log(chalk.green(`  Creator: ${creatorAddress}\n`));
 
   console.log(chalk.white("  Optional: bring your own inference provider keys (press Enter to skip)."));
-  const openaiApiKey = await promptOptional("OpenAI API key (sk-..., optional)");
+  const openaiApiKey = await promptOptional(
+    process.env.OPENAI_API_KEY
+      ? "OpenAI API key (OPENAI_API_KEY detected; press Enter to avoid saving it)"
+      : "OpenAI API key (sk-..., optional)",
+  );
   if (openaiApiKey && !openaiApiKey.startsWith("sk-")) {
     console.log(chalk.yellow("  Warning: OpenAI keys usually start with sk-. Saving anyway."));
   }
 
-  const anthropicApiKey = await promptOptional("Anthropic API key (sk-ant-..., optional)");
+  const anthropicApiKey = await promptOptional(
+    process.env.ANTHROPIC_API_KEY
+      ? "Anthropic API key (ANTHROPIC_API_KEY detected; press Enter to avoid saving it)"
+      : "Anthropic API key (sk-ant-..., optional)",
+  );
   if (anthropicApiKey && !anthropicApiKey.startsWith("sk-ant-")) {
     console.log(chalk.yellow("  Warning: Anthropic keys usually start with sk-ant-. Saving anyway."));
   }
@@ -113,10 +121,10 @@ export async function runSetupWizard(): Promise<AutomatonConfig> {
     console.log(chalk.green(`  Ollama URL saved: ${ollamaBaseUrl}`));
   }
 
-  if (openaiApiKey || anthropicApiKey || ollamaBaseUrl) {
+  if (openaiApiKey || process.env.OPENAI_API_KEY || anthropicApiKey || process.env.ANTHROPIC_API_KEY || ollamaBaseUrl) {
     const providers = [
-      openaiApiKey ? "OpenAI" : null,
-      anthropicApiKey ? "Anthropic" : null,
+      (openaiApiKey || process.env.OPENAI_API_KEY) ? "OpenAI" : null,
+      (anthropicApiKey || process.env.ANTHROPIC_API_KEY) ? "Anthropic" : null,
       ollamaBaseUrl ? "Ollama" : null,
     ].filter(Boolean).join(", ");
     console.log(chalk.green(`  Provider keys/URLs saved: ${providers}\n`));

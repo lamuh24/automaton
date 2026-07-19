@@ -49,6 +49,48 @@ export const TASK_TIMEOUTS: Record<string, number> = {
 
 export const STATIC_MODEL_BASELINE: Omit<ModelEntry, "lastSeen" | "createdAt" | "updatedAt">[] = [
   {
+    modelId: "gpt-5.6-sol",
+    provider: "openai",
+    displayName: "GPT-5.6 Sol",
+    tierMinimum: "normal",
+    costPer1kInput: 50,   // $5.00/M
+    costPer1kOutput: 300, // $30.00/M
+    maxTokens: 128000,
+    contextWindow: 1050000,
+    supportsTools: true,
+    supportsVision: true,
+    parameterStyle: "max_completion_tokens",
+    enabled: true,
+  },
+  {
+    modelId: "gpt-5.6-terra",
+    provider: "openai",
+    displayName: "GPT-5.6 Terra",
+    tierMinimum: "low_compute",
+    costPer1kInput: 25,   // $2.50/M
+    costPer1kOutput: 150, // $15.00/M
+    maxTokens: 128000,
+    contextWindow: 1050000,
+    supportsTools: true,
+    supportsVision: true,
+    parameterStyle: "max_completion_tokens",
+    enabled: true,
+  },
+  {
+    modelId: "gpt-5.6-luna",
+    provider: "openai",
+    displayName: "GPT-5.6 Luna",
+    tierMinimum: "critical",
+    costPer1kInput: 10,  // $1.00/M
+    costPer1kOutput: 60, // $6.00/M
+    maxTokens: 128000,
+    contextWindow: 1050000,
+    supportsTools: true,
+    supportsVision: true,
+    parameterStyle: "max_completion_tokens",
+    enabled: true,
+  },
+  {
     modelId: "gpt-5.2",
     provider: "openai",
     displayName: "GPT-5.2",
@@ -139,30 +181,30 @@ export const STATIC_MODEL_BASELINE: Omit<ModelEntry, "lastSeen" | "createdAt" | 
 
 export const DEFAULT_ROUTING_MATRIX: RoutingMatrix = {
   high: {
-    agent_turn: { candidates: ["gpt-5.2", "gpt-5.3"], maxTokens: 8192, ceilingCents: -1 },
+    agent_turn: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5.3"], maxTokens: 8192, ceilingCents: -1 },
     heartbeat_triage: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
-    safety_check: { candidates: ["gpt-5.2", "gpt-5.3"], maxTokens: 4096, ceilingCents: 20 },
-    summarization: { candidates: ["gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 15 },
-    planning: { candidates: ["gpt-5.2", "gpt-5.3"], maxTokens: 8192, ceilingCents: -1 },
+    safety_check: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5.3"], maxTokens: 4096, ceilingCents: 20 },
+    summarization: { candidates: ["gpt-5.6-terra", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 15 },
+    planning: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5.3"], maxTokens: 8192, ceilingCents: -1 },
   },
   normal: {
-    agent_turn: { candidates: ["gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: -1 },
+    agent_turn: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: -1 },
     heartbeat_triage: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
-    safety_check: { candidates: ["gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
-    summarization: { candidates: ["gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
-    planning: { candidates: ["gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: -1 },
+    safety_check: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
+    summarization: { candidates: ["gpt-5.6-terra", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
+    planning: { candidates: ["gpt-5.6-sol", "gpt-5.2", "gpt-5-mini"], maxTokens: 4096, ceilingCents: -1 },
   },
   low_compute: {
-    agent_turn: { candidates: ["gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
-    heartbeat_triage: { candidates: ["gpt-5-mini"], maxTokens: 1024, ceilingCents: 2 },
-    safety_check: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
-    summarization: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
-    planning: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
+    agent_turn: { candidates: ["gpt-5.6-terra", "gpt-5-mini"], maxTokens: 4096, ceilingCents: 10 },
+    heartbeat_triage: { candidates: ["gpt-5.6-luna", "gpt-5-mini"], maxTokens: 1024, ceilingCents: 2 },
+    safety_check: { candidates: ["gpt-5.6-terra", "gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
+    summarization: { candidates: ["gpt-5.6-luna", "gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
+    planning: { candidates: ["gpt-5.6-terra", "gpt-5-mini"], maxTokens: 2048, ceilingCents: 5 },
   },
   critical: {
-    agent_turn: { candidates: ["gpt-5-mini"], maxTokens: 2048, ceilingCents: 3 },
-    heartbeat_triage: { candidates: ["gpt-5-mini"], maxTokens: 512, ceilingCents: 1 },
-    safety_check: { candidates: ["gpt-5-mini"], maxTokens: 1024, ceilingCents: 2 },
+    agent_turn: { candidates: ["gpt-5.6-luna", "gpt-5-mini"], maxTokens: 2048, ceilingCents: 3 },
+    heartbeat_triage: { candidates: ["gpt-5.6-luna", "gpt-5-mini"], maxTokens: 512, ceilingCents: 1 },
+    safety_check: { candidates: ["gpt-5.6-luna", "gpt-5-mini"], maxTokens: 1024, ceilingCents: 2 },
     summarization: { candidates: [], maxTokens: 0, ceilingCents: 0 },
     planning: { candidates: [], maxTokens: 0, ceilingCents: 0 },
   },
