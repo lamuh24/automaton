@@ -187,3 +187,34 @@ export class ModelRegistry {
     };
   }
 }
+
+/** Restrict routing to the configured free local model. */
+export function configureLocalModelRegistry(
+  registry: ModelRegistry,
+  modelId: string,
+  displayName = "Local Gemma (LM Studio)",
+): void {
+  for (const model of registry.getAll()) {
+    if (model.modelId !== modelId) registry.setEnabled(model.modelId, false);
+  }
+
+  const now = new Date().toISOString();
+  const existing = registry.get(modelId);
+  registry.upsert({
+    modelId,
+    provider: "other",
+    displayName,
+    tierMinimum: "dead",
+    costPer1kInput: 0,
+    costPer1kOutput: 0,
+    maxTokens: 4096,
+    contextWindow: 131_072,
+    supportsTools: true,
+    supportsVision: false,
+    parameterStyle: "max_tokens",
+    enabled: true,
+    lastSeen: now,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+}

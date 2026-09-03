@@ -1,5 +1,5 @@
 /**
- * Conway Automaton - Type Definitions
+ * Automaton - Type Definitions
  *
  * All shared interfaces for the sovereign AI agent runtime.
  */
@@ -45,7 +45,10 @@ export interface AutomatonConfig {
   genesisPrompt: string;
   creatorMessage?: string;
   creatorAddress: string;
-  registeredWithConway: boolean;
+  /** Local identity registration state. */
+  registeredLocally?: boolean;
+  /** Legacy remote registration state, retained for config migration only. */
+  registeredWithConway?: boolean;
   sandboxId: string;
   conwayApiUrl: string;
   conwayApiKey: string;
@@ -75,11 +78,28 @@ export interface AutomatonConfig {
   rpcUrl?: string;
   /** Chain type for this automaton. Defaults to "evm" if absent. */
   chainType?: ChainType;
+  /** Infrastructure execution mode. Local uses this PC and requires no Conway services. */
+  runtimeBackend?: "local" | "conway";
+  /** Working directory used by the local host execution backend. */
+  hostWorkingDirectory?: string;
+  /** Root directory for locally isolated child workspaces. */
+  localWorkspaceRoot?: string;
+  /** Local child isolation. WSL creates real WSL2 virtual machines on Windows. */
+  localVmBackend?: "wsl" | "workspace";
+  /** Logical compute budget used by survival accounting in local mode. */
+  localComputeBudgetCents?: number;
+  /** Optional proprietary OpenAI-compatible inference endpoint. */
+  inferenceApiUrl?: string;
+  /** Optional key for the proprietary OpenAI-compatible inference endpoint. */
+  inferenceApiKey?: string;
 }
 
 export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
-  conwayApiUrl: "https://api.conway.tech",
-  inferenceModel: "gpt-5.2",
+  runtimeBackend: "local",
+  conwayApiUrl: "",
+  conwayApiKey: "",
+  inferenceApiUrl: "http://127.0.0.1:1234",
+  inferenceModel: "gemma-local",
   maxTokensPerTurn: 4096,
   heartbeatConfigPath: "~/.automaton/heartbeat.yml",
   dbPath: "~/.automaton/state.db",
@@ -89,7 +109,9 @@ export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   maxChildren: 3,
   maxTurnsPerCycle: 25,
   childSandboxMemoryMb: 1024,
-  socialRelayUrl: "https://social.conway.tech",
+  localWorkspaceRoot: "~/.automaton/workspaces",
+  localVmBackend: "wsl",
+  localComputeBudgetCents: 1_000_000_000,
 };
 
 // ─── Agent State ─────────────────────────────────────────────────
@@ -361,6 +383,12 @@ export interface ConwayClient {
   exposePort(port: number): Promise<PortInfo>;
   removePort(port: number): Promise<void>;
   createSandbox(options: CreateSandboxOptions): Promise<SandboxInfo>;
+  /** Clone an existing local VM, when supported by the infrastructure backend. */
+  cloneSandbox?(sourceSandboxId: string, options: CreateSandboxOptions): Promise<SandboxInfo>;
+  /** Start a stopped local VM, when supported by the infrastructure backend. */
+  startSandbox?(sandboxId: string): Promise<void>;
+  /** Stop a running local VM, when supported by the infrastructure backend. */
+  stopSandbox?(sandboxId: string): Promise<void>;
   deleteSandbox(sandboxId: string): Promise<void>;
   listSandboxes(): Promise<SandboxInfo[]>;
   getCreditsBalance(): Promise<number>;
@@ -870,11 +898,12 @@ export interface TokenBudget {
 }
 
 export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
-  total: 100_000,
+  // Gemma 4 E4B exposes a 131,072-token context. Reserve 4,096 for output.
+  total: 126_976,
   systemPrompt: 20_000,
-  recentTurns: 50_000,
-  toolResults: 20_000,
-  memoryRetrieval: 10_000,
+  recentTurns: 80_000,
+  toolResults: 16_000,
+  memoryRetrieval: 10_976,
 };
 
 // ─── Phase 1: Runtime Reliability ───────────────────────────────
@@ -1245,9 +1274,9 @@ export interface ModelStrategyConfig {
 }
 
 export const DEFAULT_MODEL_STRATEGY_CONFIG: ModelStrategyConfig = {
-  inferenceModel: "gpt-5.2",
-  lowComputeModel: "gpt-5-mini",
-  criticalModel: "gpt-5-mini",
+  inferenceModel: "gemma-local",
+  lowComputeModel: "gemma-local",
+  criticalModel: "gemma-local",
   maxTokensPerTurn: 4096,
   hourlyBudgetCents: 0,
   sessionBudgetCents: 0,

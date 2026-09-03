@@ -8,16 +8,9 @@
 
 import type { ConwayClient, AutomatonDatabase } from "../types.js";
 import { gitInit, gitCommit, gitStatus, gitLog } from "./tools.js";
+import { resolveHomePath } from "../utils/home.js";
 
 const AUTOMATON_DIR = "~/.automaton";
-
-function resolveHome(p: string): string {
-  const home = process.env.HOME || "/root";
-  if (p.startsWith("~")) {
-    return `${home}${p.slice(1)}`;
-  }
-  return p;
-}
 
 /**
  * Initialize git repo for the automaton's state directory.
@@ -26,7 +19,7 @@ function resolveHome(p: string): string {
 export async function initStateRepo(
   conway: ConwayClient,
 ): Promise<void> {
-  const dir = resolveHome(AUTOMATON_DIR);
+  const dir = resolveHomePath(AUTOMATON_DIR);
 
   // Check if already initialized
   const checkResult = await conway.exec(
@@ -74,7 +67,7 @@ export async function commitStateChange(
   description: string,
   category: string = "state",
 ): Promise<string> {
-  const dir = resolveHome(AUTOMATON_DIR);
+  const dir = resolveHomePath(AUTOMATON_DIR);
 
   // Check if there are changes
   const status = await gitStatus(conway, dir);
@@ -139,6 +132,6 @@ export async function getStateHistory(
   conway: ConwayClient,
   limit: number = 20,
 ) {
-  const dir = resolveHome(AUTOMATON_DIR);
+  const dir = resolveHomePath(AUTOMATON_DIR);
   return gitLog(conway, dir, limit);
 }

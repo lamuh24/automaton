@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "source": "local visual-demo mock only — not market data and never used for simulated trades",
+  "marketCapsUsd": {
+    "BTC": 1000000000000,
+    "ETH": 500000000000,
+    "SOL": 100000000000,
+    "AAPL": 500000000000,
+    "MSFT": 1000000000000,
+    "TSLA": 50000000000
+  }
+}

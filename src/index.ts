@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Conway Automaton Runtime
+ * Automaton Runtime
  *
  * The entry point for the sovereign AI agent.
  * Handles CLI args, bootstrapping, and orchestrating
@@ -8,12 +8,18 @@
  */
 
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { getWallet, getAutomatonDir } from "./identity/wallet.js";
 import { provision, loadApiKeyFromConfig } from "./identity/provision.js";
 import { loadConfig, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
 import { createConwayClient } from "./conway/client.js";
+import {
+  createLocalInfrastructureClient,
+  resolveSafeWorkspaceRoot,
+} from "./infrastructure/local-client.js";
+import { toWslMountPath } from "./infrastructure/wsl-vm.js";
 import { createInferenceClient } from "./conway/inference.js";
 import { createHeartbeatDaemon } from "./heartbeat/daemon.js";
 import {
@@ -22,7 +28,12 @@ import {
 } from "./heartbeat/config.js";
 import { consumeNextWakeEvent, insertWakeEvent } from "./state/database.js";
 import { runAgentLoop } from "./agent/loop.js";
-import { ModelRegistry } from "./inference/registry.js";
+import { ModelRegistry, configureLocalModelRegistry } from "./inference/registry.js";
+import {
+  ensureLocalGemmaReady,
+  testLocalGemmaInference,
+  unloadLocalGemma,
+} from "./inference/lm-studio.js";
 import { loadSkills } from "./skills/loader.js";
 import { initStateRepo } from "./git/state-versioning.js";
 import { createSocialClient } from "./social/client.js";
@@ -46,13 +57,13 @@ async function main(): Promise<void> {
   // ─── CLI Commands ────────────────────────────────────────────
 
   if (args.includes("--version") || args.includes("-v")) {
-    logger.info(`Conway Automaton v${VERSION}`);
+    logger.info(`Automaton v${VERSION}`);
     process.exit(0);
   }
 
   if (args.includes("--help") || args.includes("-h")) {
     logger.info(`
-Conway Automaton v${VERSION}
+Automaton v${VERSION}
 Sovereign AI Agent Runtime
 
 Usage:
@@ -61,15 +72,18 @@ Usage:
   automaton --configure    Edit configuration (providers, model, treasury, general)
   automaton --pick-model   Interactively pick the active inference model
   automaton --init         Initialize wallet and config directory
-  automaton --provision    Provision Conway API key via SIWE
+  automaton --doctor       Verify Gemma, host tools, and the WSL2 VM lifecycle
+  automaton --provision    Legacy Conway provisioning (Conway backend only)
   automaton --status       Show current automaton status
   automaton --version      Show version
   automaton --help         Show this help
 
 Environment:
-  CONWAY_API_URL           Conway API URL (default: https://api.conway.tech)
-  CONWAY_API_KEY           Conway API key (overrides config)
-  OLLAMA_BASE_URL          Ollama base URL (overrides config, e.g. http://localhost:11434)
+  AUTOMATON_SHELL          Shell executable for local host workflows
+  AUTOMATON_LOCAL_BUDGET_CENTS  Logical local compute budget
+  AUTOMATON_VM_BACKEND     Child isolation: wsl (default on Windows) or workspace
+  AUTOMATON_VM_IMAGE_ROOT  Local cache for verified WSL2 VM images
+  AUTOMATON_INFERENCE_URL  Local OpenAI-compatible URL (default: http://127.0.0.1:1234)
 `);
     process.exit(0);
   }
@@ -96,6 +110,11 @@ Environment:
   }
 
   if (args.includes("--provision")) {
+    const existingConfig = loadConfig();
+    if (!existingConfig || existingConfig.runtimeBackend !== "conway") {
+      logger.error("Provisioning is not used by the local infrastructure backend.");
+      process.exit(1);
+    }
     try {
       const result = await provision();
       logger.info(JSON.stringify(result));
@@ -109,6 +128,11 @@ Environment:
   if (args.includes("--status")) {
     await showStatus();
     process.exit(0);
+  }
+
+  if (args.includes("--doctor")) {
+    await runDoctor();
+    process.exit(process.exitCode || 0);
   }
 
   if (args.includes("--setup")) {
@@ -165,7 +189,7 @@ async function showStatus(): Promise<void> {
 Name:       ${config.name}
 Address:    ${config.walletAddress}
 Creator:    ${config.creatorAddress}
-Sandbox:    ${config.sandboxId}
+Workspace:  ${config.sandboxId || config.hostWorkingDirectory || "local host"}
 State:      ${state}
 Turns:      ${turnCount}
 Tools:      ${tools.length} installed
@@ -181,10 +205,148 @@ Version:    ${config.version}
   db.close();
 }
 
+async function runDoctor(): Promise<void> {
+  const config = loadConfig();
+  const vmBackend = (
+    process.env.AUTOMATON_VM_BACKEND || config?.localVmBackend || "wsl"
+  ) as "wsl" | "workspace";
+  const tempBase = vmBackend === "wsl"
+    ? path.join(path.dirname(resolveSafeWorkspaceRoot(config?.localWorkspaceRoot)), ".doctor")
+    : path.resolve(os.tmpdir());
+  fs.mkdirSync(tempBase, { recursive: true });
+  const doctorRoot = fs.mkdtempSync(path.join(tempBase, "automaton-doctor-"));
+  const workspaceRoot = path.join(doctorRoot, "workspaces");
+  const client = createLocalInfrastructureClient({
+    workingDirectory: config?.hostWorkingDirectory || process.cwd(),
+    workspaceRoot,
+    computeBudgetCents: config?.localComputeBudgetCents,
+    vmBackend,
+  });
+  const createdSandboxIds: string[] = [];
+
+  const report: Record<string, unknown> = {
+    backend: "local",
+    node: process.version,
+    platform: `${process.platform}/${process.arch}`,
+    workingDirectory: config?.hostWorkingDirectory || process.cwd(),
+    inferenceConfigured: true,
+  };
+
+  try {
+    const git = await client.exec("git --version", 10_000);
+    if (git.exitCode !== 0) throw new Error(git.stderr || "Git is not available");
+    report.git = git.stdout.trim();
+
+    const localInference = await ensureLocalGemmaReady({
+      endpoint: process.env.AUTOMATON_INFERENCE_URL || config?.inferenceApiUrl,
+      model: config?.inferenceModel,
+    });
+    await testLocalGemmaInference(localInference);
+    report.inference = `${localInference.model} via ${localInference.endpoint}`;
+    const doctorInference = createInferenceClient({
+      apiUrl: localInference.endpoint,
+      apiKey: "",
+      customApiUrl: localInference.endpoint,
+      defaultModel: localInference.model,
+      maxTokens: 128,
+    });
+    const toolResponse = await doctorInference.chat(
+      [{ role: "user", content: "Call the get_local_status tool now." }],
+      {
+        tools: [{
+          type: "function",
+          function: {
+            name: "get_local_status",
+            description: "Read local runtime status",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+      },
+    );
+    if (!toolResponse.toolCalls?.some((call) => call.function.name === "get_local_status")) {
+      throw new Error("Local Gemma tool-call check failed");
+    }
+    report.inferenceTools = "ready";
+
+    const workspace = await client.createSandbox({ name: "doctor" });
+    createdSandboxIds.push(workspace.id);
+    const scoped = client.createScopedClient(workspace.id);
+    await scoped.writeFile("/root/connection.txt", "local-workflows-ready");
+    const content = await scoped.readFile("/root/connection.txt");
+    if (content !== "local-workflows-ready") throw new Error("Workspace file check failed");
+
+    const cloneSource = vmBackend === "wsl"
+      ? toWslMountPath(process.cwd()).replace(/'/g, "'\\''")
+      : process.cwd()
+      .replace(/\\/g, "/")
+      .replace(/^([A-Za-z]):/, "/$1")
+      .replace(/'/g, "'\\''");
+    const clone = await scoped.exec(
+      `git clone --quiet --no-hardlinks --no-checkout '${cloneSource}' /root/repo-copy`,
+      30_000,
+    );
+    if (clone.exitCode !== 0) throw new Error(clone.stderr || "Local Git clone check failed");
+
+    const port = await client.exposePort(3210);
+    const listed = await client.listSandboxes();
+    if (!listed.some((item) => item.id === workspace.id)) {
+      throw new Error("VM registry check failed");
+    }
+
+    if (!client.cloneSandbox || !client.stopSandbox || !client.startSandbox) {
+      throw new Error("The configured local backend does not provide VM lifecycle operations");
+    }
+    const cloned = await client.cloneSandbox(workspace.id, { name: "doctor-clone" });
+    createdSandboxIds.push(cloned.id);
+    const clonedClient = client.createScopedClient(cloned.id);
+    const clonedContent = await clonedClient.readFile("/root/connection.txt");
+    if (clonedContent !== "local-workflows-ready") throw new Error("VM clone check failed");
+    await client.stopSandbox(cloned.id);
+    await client.startSandbox(cloned.id);
+    const restarted = await clonedClient.exec("printf vm-restarted", 30_000);
+    if (restarted.exitCode !== 0 || !restarted.stdout.includes("vm-restarted")) {
+      throw new Error("VM restart check failed");
+    }
+
+    report.shell = "ready";
+    report.filesystem = "ready";
+    report.gitClone = "ready";
+    report.workspaces = "ready";
+    report.vmIsolation = "wsl2-vm";
+    report.vmClone = "ready";
+    report.vmLifecycle = "create/start/stop/delete ready";
+    report.localPorts = port.publicUrl;
+    report.status = "ready";
+    logger.info(JSON.stringify(report, null, 2));
+  } catch (error: any) {
+    report.status = "failed";
+    report.error = error?.message || String(error);
+    logger.error(JSON.stringify(report, null, 2));
+    process.exitCode = 1;
+  } finally {
+    try {
+      await unloadLocalGemma();
+    } catch {
+      // Doctor is bounded and should not leave a high-memory model resident.
+    }
+    for (const id of createdSandboxIds.reverse()) {
+      try {
+        await client.deleteSandbox(id);
+      } catch {
+        // Preserve the original doctor result; stale entries can be inspected with list_sandboxes.
+      }
+    }
+    const relative = path.relative(tempBase, path.resolve(doctorRoot));
+    if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+      fs.rmSync(doctorRoot, { recursive: true, force: true });
+    }
+  }
+}
+
 // ─── Main Run ──────────────────────────────────────────────────
 
 async function run(): Promise<void> {
-  logger.info(`[${new Date().toISOString()}] Conway Automaton v${VERSION} starting...`);
+  logger.info(`[${new Date().toISOString()}] Automaton v${VERSION} starting...`);
 
   // Load config — first run triggers interactive setup wizard
   let config = loadConfig();
@@ -193,11 +355,34 @@ async function run(): Promise<void> {
     config = await runSetupWizard();
   }
 
+  const runtimeBackend = config.runtimeBackend || "local";
+  const inferenceApiUrl = process.env.AUTOMATON_INFERENCE_URL || config.inferenceApiUrl;
+  const inferenceApiKey = process.env.AUTOMATON_INFERENCE_API_KEY || config.inferenceApiKey;
+  const openaiApiKey = runtimeBackend === "conway"
+    ? process.env.OPENAI_API_KEY || config.openaiApiKey
+    : undefined;
+  const anthropicApiKey = runtimeBackend === "conway"
+    ? process.env.ANTHROPIC_API_KEY || config.anthropicApiKey
+    : undefined;
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
+
+  if (runtimeBackend === "local") {
+    const localInference = await ensureLocalGemmaReady({
+      endpoint: inferenceApiUrl,
+      model: config.inferenceModel,
+    });
+    logger.info(
+      `[${new Date().toISOString()}] Local inference ready: ${localInference.model} at ${localInference.endpoint}`,
+    );
+  }
+
   // Load wallet (chain-aware)
   const { account, chainIdentity, chainType: walletChainType } = await getWallet();
   const resolvedChainType = config.chainType || walletChainType || "evm";
-  const apiKey = config.conwayApiKey || loadApiKeyFromConfig();
-  if (!apiKey) {
+  const apiKey = runtimeBackend === "conway"
+    ? config.conwayApiKey || loadApiKeyFromConfig() || ""
+    : "";
+  if (runtimeBackend === "conway" && !apiKey) {
     logger.error("No API key found. Run: automaton --provision");
     process.exit(1);
   }
@@ -238,15 +423,30 @@ async function run(): Promise<void> {
     db.setIdentity("automatonId", automatonId);
   }
 
-  // Create Conway client
-  const conway = createConwayClient({
-    apiUrl: config.conwayApiUrl,
-    apiKey,
-    sandboxId: config.sandboxId,
-  });
+  // Create the infrastructure client. Local mode runs entirely on this PC.
+  const conway = runtimeBackend === "conway"
+    ? createConwayClient({
+        apiUrl: config.conwayApiUrl,
+        apiKey,
+        sandboxId: config.sandboxId,
+      })
+    : createLocalInfrastructureClient({
+        workingDirectory: config.hostWorkingDirectory || process.cwd(),
+        workspaceRoot: config.localWorkspaceRoot,
+        sandboxId: config.sandboxId,
+        computeBudgetCents: Number(
+          process.env.AUTOMATON_LOCAL_BUDGET_CENTS || config.localComputeBudgetCents,
+        ),
+        vmBackend: (
+          process.env.AUTOMATON_VM_BACKEND || config.localVmBackend
+        ) as "wsl" | "workspace" | undefined,
+      });
 
   // Register automaton identity (one-time, immutable)
-  const registrationState = db.getIdentity("conwayRegistrationStatus");
+  const registrationKey = runtimeBackend === "conway"
+    ? "conwayRegistrationStatus"
+    : "localRegistrationStatus";
+  const registrationState = db.getIdentity(registrationKey);
   if (registrationState !== "registered") {
     try {
       const genesisPromptHash = config.genesisPrompt
@@ -263,35 +463,37 @@ async function run(): Promise<void> {
         chainType: resolvedChainType,
         chainIdentity,
       });
-      db.setIdentity("conwayRegistrationStatus", "registered");
+      db.setIdentity(registrationKey, "registered");
       logger.info(`[${new Date().toISOString()}] Automaton identity registered.`);
     } catch (err: any) {
       const status = err?.status;
       if (status === 409) {
-        db.setIdentity("conwayRegistrationStatus", "conflict");
+        db.setIdentity(registrationKey, "conflict");
         logger.warn(`[${new Date().toISOString()}] Automaton identity conflict: ${err.message}`);
       } else {
-        db.setIdentity("conwayRegistrationStatus", "failed");
+        db.setIdentity(registrationKey, "failed");
         logger.warn(`[${new Date().toISOString()}] Automaton identity registration failed: ${err.message}`);
       }
     }
   }
 
-  // Resolve Ollama base URL: env var takes precedence over config
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
-
   // Create inference client — pass a live registry lookup so model names like
   // "gpt-oss:120b" route to Ollama based on their registered provider, not heuristics.
   const modelRegistry = new ModelRegistry(db.raw);
   modelRegistry.initialize();
+  if (runtimeBackend === "local") {
+    configureLocalModelRegistry(modelRegistry, config.inferenceModel);
+  }
   const inference = createInferenceClient({
-    apiUrl: config.conwayApiUrl,
-    apiKey,
+    apiUrl: inferenceApiUrl || config.conwayApiUrl,
+    apiKey: inferenceApiKey || apiKey,
+    customApiUrl: inferenceApiUrl,
+    customApiKey: inferenceApiKey,
     defaultModel: config.inferenceModel,
     maxTokens: config.maxTokensPerTurn,
-    lowComputeModel: config.modelStrategy?.lowComputeModel || "gpt-5-mini",
-    openaiApiKey: config.openaiApiKey,
-    anthropicApiKey: config.anthropicApiKey,
+    lowComputeModel: config.modelStrategy?.lowComputeModel || config.inferenceModel,
+    openaiApiKey,
+    anthropicApiKey,
     ollamaBaseUrl,
     getModelProvider: (modelId) => modelRegistry.get(modelId)?.provider,
   });
@@ -336,9 +538,9 @@ async function run(): Promise<void> {
     logger.warn(`[${new Date().toISOString()}] State repo init failed: ${err.message}`);
   }
 
-  // Bootstrap topup: buy minimum credits ($5) from USDC so the agent can start.
+  // Legacy Conway-only bootstrap topup.
   // The agent decides larger topups itself via the topup_credits tool.
-  try {
+  if (runtimeBackend === "conway") try {
     let bootstrapTimer: ReturnType<typeof setTimeout>;
     const bootstrapTimeout = new Promise<null>((_, reject) => {
       bootstrapTimer = setTimeout(() => reject(new Error("bootstrap topup timed out")), 15_000);

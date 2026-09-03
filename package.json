@@ -1,7 +1,7 @@
 {
-  "name": "@conway/automaton",
+  "name": "@lamuh24/automaton",
   "version": "0.2.1",
-  "description": "Conway Automaton - Sovereign AI Agent Runtime",
+  "description": "Host-native sovereign AI agent runtime",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,19 +20,18 @@
     }
   },
   "bin": {
-    "automaton": "dist/index.js",
-    "conway-automaton": "dist/index.js"
+    "automaton": "dist/index.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Conway-Research/automaton.git"
+    "url": "https://github.com/lamuh24/automaton.git"
   },
-  "homepage": "https://conway.tech",
+  "homepage": "https://github.com/lamuh24/automaton",
   "keywords": [
     "autonomous-agent",
     "sovereign-ai",
     "web4",
-    "conway",
+    "local-first",
     "self-replicating"
   ],
   "license": "MIT",
@@ -46,6 +45,9 @@
     "test:security": "vitest run --grep 'security|injection|policy'",
     "test:financial": "vitest run --grep 'financial|spend|treasury'",
     "test:ci": "vitest run --reporter=verbose",
+    "setup:local": "tsx scripts/bootstrap-local-profile.ts",
+    "doctor:vm": "tsx scripts/verify-local-vm.ts",
+    "paper-trading:dashboard": "tsx scripts/paper-trading-dashboard.ts",
     "clean": "rm -rf dist && pnpm -r clean"
   },
   "dependencies": {
@@ -73,7 +75,7 @@
     "vitest": "^2.0.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0 <24.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

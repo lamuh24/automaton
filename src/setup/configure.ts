@@ -16,6 +16,8 @@ import type { AutomatonConfig, ModelStrategyConfig, TreasuryPolicy, ModelEntry }
 import { closePrompts } from "./prompts.js";
 import { createDatabase } from "../state/database.js";
 import { ModelRegistry } from "../inference/registry.js";
+import { configureLocalModelRegistry } from "../inference/registry.js";
+import { LOCAL_GEMMA_API_URL, LOCAL_GEMMA_MODEL } from "../inference/lm-studio.js";
 
 // ─── Readline helpers ─────────────────────────────────────────────
 
@@ -101,7 +103,7 @@ async function askChoice<T extends string>(
 const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  conway: "Conway",
+  conway: "Legacy",
   ollama: "Ollama",
   other: "Other",
 };
@@ -170,12 +172,7 @@ function val(v: string | number | boolean | undefined): string {
 // ─── Main menu ────────────────────────────────────────────────────
 
 function printMainMenu(config: AutomatonConfig): void {
-  const providers = [
-    config.openaiApiKey ? "OpenAI" : null,
-    config.anthropicApiKey ? "Anthropic" : null,
-    config.ollamaBaseUrl ? "Ollama" : null,
-    "Conway",
-  ].filter(Boolean).join(", ");
+  const providers = `Local Gemma (${config.inferenceApiUrl || LOCAL_GEMMA_API_URL})`;
 
   const strategy = config.modelStrategy ?? DEFAULT_MODEL_STRATEGY_CONFIG;
 
@@ -196,16 +193,17 @@ function printMainMenu(config: AutomatonConfig): void {
 
 async function configureProviders(config: AutomatonConfig): Promise<void> {
   console.log(chalk.cyan("\n  ── Inference Providers ─────────────────────────\n"));
-  console.log(chalk.dim("  Press Enter to keep the current value. Type - to clear an optional field.\n"));
+  console.log(chalk.dim("  Local inference only. No API key is required.\n"));
 
-  config.conwayApiKey = await askRequiredString(
-    "Conway API key",
-    config.conwayApiKey,
-  );
-
-  config.openaiApiKey = await askString("OpenAI API key  (sk-...)", config.openaiApiKey) || undefined;
-  config.anthropicApiKey = await askString("Anthropic API key  (sk-ant-...)", config.anthropicApiKey) || undefined;
-  config.ollamaBaseUrl = await askString("Ollama base URL  (http://localhost:11434)", config.ollamaBaseUrl) || undefined;
+  config.inferenceApiUrl = await askString(
+    "LM Studio base URL (without /v1)",
+    config.inferenceApiUrl || LOCAL_GEMMA_API_URL,
+  ) || undefined;
+  config.inferenceModel = LOCAL_GEMMA_MODEL;
+  config.openaiApiKey = undefined;
+  config.anthropicApiKey = undefined;
+  config.ollamaBaseUrl = undefined;
+  config.inferenceApiKey = undefined;
 
   console.log("");
 }
@@ -220,13 +218,7 @@ async function configureModelStrategy(config: AutomatonConfig): Promise<void> {
   const db = createDatabase(dbPath);
   const registry = new ModelRegistry(db.raw);
   registry.initialize();
-
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
-  if (ollamaBaseUrl) {
-    console.log(chalk.dim(`  Checking Ollama at ${ollamaBaseUrl}...`));
-    const { discoverOllamaModels } = await import("../ollama/discover.js");
-    await discoverOllamaModels(ollamaBaseUrl, db.raw);
-  }
+  configureLocalModelRegistry(registry, LOCAL_GEMMA_MODEL);
 
   const models = registry.getAll().filter((m) => m.enabled);
   db.close();

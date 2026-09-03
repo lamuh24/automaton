@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { getHomeDir } from "../utils/home.js";
 import type {
   AutomatonIdentity,
   AutomatonConfig,
@@ -46,7 +47,7 @@ import {
 } from "../state/database.js";
 import type { InboxMessageRow } from "../state/database.js";
 import { ulid } from "ulid";
-import { ModelRegistry } from "../inference/registry.js";
+import { ModelRegistry, configureLocalModelRegistry } from "../inference/registry.js";
 import { InferenceBudgetTracker } from "../inference/budget.js";
 import { InferenceRouter } from "../inference/router.js";
 import { MemoryRetriever } from "../memory/retrieval.js";
@@ -62,7 +63,8 @@ import { LocalWorkerPool } from "../orchestration/local-worker.js";
 import { SimpleAgentTracker, SimpleFundingProtocol } from "../orchestration/simple-tracker.js";
 import { HarnessRegistry } from "./harness-registry.js";
 import { createWorkerInferenceBridge } from "./worker-inference-bridge.js";
-import { ProviderRegistry } from "../inference/provider-registry.js";
+import { ProviderRegistry, type ProviderConfig } from "../inference/provider-registry.js";
+import { LOCAL_GEMMA_API_URL, normalizeApiBase } from "../inference/lm-studio.js";
 import { UnifiedInferenceClient } from "../inference/inference-client.js";
 import { isIdleOnlyTool } from "./idle-only-tools.js";
 
@@ -96,7 +98,10 @@ export async function runAgentLoop(
   const { identity, config, db, conway, inference, social, skills, policyEngine, spendTracker, onStateChange, onTurnComplete, ollamaBaseUrl } =
     options;
 
-  const builtinTools = createBuiltinTools(identity.sandboxId);
+  const builtinTools = createBuiltinTools(
+    identity.sandboxId,
+    config.runtimeBackend || "local",
+  );
   const installedTools = loadInstalledTools(db);
   const tools = [...builtinTools, ...installedTools];
   const toolContext: ToolContext = {
@@ -113,8 +118,16 @@ export async function runAgentLoop(
     ...DEFAULT_MODEL_STRATEGY_CONFIG,
     ...(config.modelStrategy ?? {}),
   };
+  if ((config.runtimeBackend || "local") === "local") {
+    modelStrategyConfig.inferenceModel = config.inferenceModel;
+    modelStrategyConfig.lowComputeModel = config.inferenceModel;
+    modelStrategyConfig.criticalModel = config.inferenceModel;
+  }
   const modelRegistry = new ModelRegistry(db.raw);
   modelRegistry.initialize();
+  if ((config.runtimeBackend || "local") === "local") {
+    configureLocalModelRegistry(modelRegistry, config.inferenceModel);
+  }
 
   // Discover Ollama models if configured
   if (ollamaBaseUrl) {
@@ -135,37 +148,45 @@ export async function runAgentLoop(
 
       // Bridge automaton config API keys to env vars for the provider registry.
       // The registry reads keys from process.env; the automaton config may have
-      // them from config.json or Conway provisioning.
+      // them from config.json or the proprietary inference adapter.
       if (config.openaiApiKey && !process.env.OPENAI_API_KEY) {
         process.env.OPENAI_API_KEY = config.openaiApiKey;
       }
       if (config.anthropicApiKey && !process.env.ANTHROPIC_API_KEY) {
         process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
       }
-      // Conway Compute API is OpenAI-compatible. Use it as fallback when no
-      // direct OpenAI key is available. The conwayApiKey is always present
-      // (required for sandbox operations), so this ensures the orchestrator
-      // can always make inference calls.
-      if (config.conwayApiKey && !process.env.CONWAY_API_KEY) {
+      const proprietaryKey = process.env.AUTOMATON_INFERENCE_API_KEY || config.inferenceApiKey;
+      const proprietaryUrl = process.env.AUTOMATON_INFERENCE_URL || config.inferenceApiUrl;
+      if (proprietaryKey && !process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = proprietaryKey;
+      }
+      if (proprietaryUrl) {
+        const base = proprietaryUrl.replace(/\/+$/, "").replace(/\/v1$/i, "");
+        process.env.OPENAI_BASE_URL = base + "/v1";
+      }
+
+      // Legacy Conway inference fallback, used only when that backend is
+      // explicitly selected.
+      if (config.runtimeBackend === "conway" && config.conwayApiKey && !process.env.CONWAY_API_KEY) {
         process.env.CONWAY_API_KEY = config.conwayApiKey;
       }
-      // If no OpenAI key is set but Conway key is available, use Conway as
-      // the OpenAI provider (Conway Compute is OpenAI API-compatible).
-      if (!process.env.OPENAI_API_KEY && config.conwayApiKey) {
+      if (config.runtimeBackend === "conway" && !process.env.OPENAI_API_KEY && config.conwayApiKey) {
         process.env.OPENAI_API_KEY = config.conwayApiKey;
         process.env.OPENAI_BASE_URL = `${config.conwayApiUrl}/v1`;
       }
 
-      const providersPath = path.join(
-        process.env.HOME || process.cwd(),
-        ".automaton",
-        "inference-providers.json",
-      );
-      const registry = ProviderRegistry.fromConfig(providersPath);
+      const providersPath = path.join(getHomeDir(), ".automaton", "inference-providers.json");
+      const localOnly = (config.runtimeBackend || "local") === "local";
+      const registry = localOnly
+        ? createLocalOnlyProviderRegistry(
+            proprietaryUrl || LOCAL_GEMMA_API_URL,
+            config.inferenceModel,
+          )
+        : ProviderRegistry.fromConfig(providersPath);
 
       // If OPENAI_BASE_URL was set (Conway fallback), update the default
       // provider's baseUrl so the OpenAI client points to Conway Compute.
-      if (process.env.OPENAI_BASE_URL) {
+      if (!localOnly && process.env.OPENAI_BASE_URL) {
         registry.overrideBaseUrl("openai", process.env.OPENAI_BASE_URL);
       }
 
@@ -358,7 +379,7 @@ export async function runAgentLoop(
   onStateChange?.("waking");
 
   // Get financial state
-  let financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
+  let financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm", (config.runtimeBackend || "local") === "local");
 
   // Check if this is the first run
   const isFirstRun = db.getTurnCount() === 0;
@@ -426,7 +447,7 @@ export async function runAgentLoop(
       }
 
       // Refresh financial state periodically
-      financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
+      financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm", (config.runtimeBackend || "local") === "local");
 
       // Check survival tier
       // api_unreachable: creditsCents === -1 means API failed with no cache.
@@ -461,7 +482,7 @@ export async function runAgentLoop(
                 log(config, `[AUTO-TOPUP] Bought $${topupResult.amountUsd} credits from USDC mid-loop`);
                 // Re-fetch financial state after topup so the rest of
                 // the turn sees the updated balance.
-                financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
+                financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm", (config.runtimeBackend || "local") === "local");
               }
             } catch (err: any) {
               logger.warn(`Inline auto-topup failed: ${err.message}`);
@@ -492,7 +513,7 @@ export async function runAgentLoop(
 
       // Build context — filter out purely idle turns (only status checks)
       // to prevent the model from continuing a status-check pattern
-      const allTurns = db.getRecentTurns(20);
+      const allTurns = db.getRecentTurns(100);
       const meaningfulTurns = allTurns.filter((t) => {
         if (t.toolCalls.length === 0) return true; // text-only turns are meaningful
         return t.toolCalls.some((tc) => !isIdleOnlyTool(tc.name));
@@ -936,6 +957,38 @@ export async function runAgentLoop(
   log(config, `[LOOP END] Agent loop finished. State: ${db.getAgentState()}`);
 }
 
+function createLocalOnlyProviderRegistry(baseUrl: string, modelId: string): ProviderRegistry {
+  const models: ProviderConfig["models"] = (["reasoning", "fast", "cheap"] as const)
+    .map((tier) => ({
+      id: modelId,
+      tier,
+      contextWindow: 131_072,
+      maxOutputTokens: 4096,
+      costPerInputToken: 0,
+      costPerOutputToken: 0,
+      supportsTools: true,
+      supportsVision: false,
+      supportsStreaming: true,
+    }));
+  const providers: ProviderConfig[] = [{
+    id: "local",
+    name: "Local Gemma (LM Studio)",
+    baseUrl: `${normalizeApiBase(baseUrl)}/v1`,
+    apiKeyEnvVar: "LOCAL_API_KEY",
+    models,
+    maxRequestsPerMinute: 1_000,
+    maxTokensPerMinute: 10_000_000,
+    priority: 1,
+    enabled: true,
+  }];
+  const localDefault = { preferredProvider: "local", fallbackOrder: [] };
+  return new ProviderRegistry(providers, {
+    reasoning: localDefault,
+    fast: localDefault,
+    cheap: localDefault,
+  });
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 // Cache last known good balances so transient API failures don't
@@ -948,6 +1001,7 @@ async function getFinancialState(
   address: string,
   db?: AutomatonDatabase,
   chainType?: string,
+  localOnly = false,
 ): Promise<FinancialState> {
   let creditsCents = _lastKnownCredits;
   let usdcBalance = _lastKnownUsdc;
@@ -979,6 +1033,14 @@ async function getFinancialState(
     return {
       creditsCents: -1,
       usdcBalance: -1,
+      lastChecked: new Date().toISOString(),
+    };
+  }
+
+  if (localOnly) {
+    return {
+      creditsCents,
+      usdcBalance: 0,
       lastChecked: new Date().toISOString(),
     };
   }

@@ -137,10 +137,10 @@ describe("createInferenceClient setLowComputeMode", () => {
     expect(client.getDefaultModel()).toBe("gpt-5-mini");
   });
 
-  it("falls back to gpt-5-mini when no lowComputeModel is provided", () => {
+  it("keeps the configured local model when no lowComputeModel is provided", () => {
     const client = createInferenceClient(baseOptions);
     client.setLowComputeMode(true);
-    expect(client.getDefaultModel()).toBe("gpt-5-mini");
+    expect(client.getDefaultModel()).toBe("gpt-5.2");
   });
 
   it("restores defaultModel when low compute mode is disabled", () => {

@@ -26,33 +26,9 @@ const DEFAULT_HEARTBEAT_CONFIG: HeartbeatConfig = {
       enabled: true,
     },
     {
-      name: "check_credits",
-      schedule: "0 */6 * * *",
-      task: "check_credits",
-      enabled: true,
-    },
-    {
-      name: "check_usdc_balance",
-      schedule: USDC_TOPUP_FAST_SCHEDULE,
-      task: "check_usdc_balance",
-      enabled: true,
-    },
-    {
-      name: "check_for_updates",
-      schedule: "0 */4 * * *",
-      task: "check_for_updates",
-      enabled: true,
-    },
-    {
       name: "health_check",
       schedule: "*/30 * * * *",
       task: "health_check",
-      enabled: true,
-    },
-    {
-      name: "check_social_inbox",
-      schedule: "*/2 * * * *",
-      task: "check_social_inbox",
       enabled: true,
     },
   ],

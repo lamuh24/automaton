@@ -37,10 +37,10 @@ const SANDBOX_HOME = "/root";
 function confinePathToSandbox(filePath: string): string | { error: string } {
   // Resolve ~ to SANDBOX_HOME
   const expanded = filePath.startsWith("~")
-    ? nodePath.join(SANDBOX_HOME, filePath.slice(1))
+    ? nodePath.posix.join(SANDBOX_HOME, filePath.slice(1).replace(/\\/g, "/"))
     : filePath;
   // Resolve to absolute (relative paths resolve against SANDBOX_HOME)
-  const resolved = nodePath.resolve(SANDBOX_HOME, expanded);
+  const resolved = nodePath.posix.resolve(SANDBOX_HOME, expanded.replace(/\\/g, "/"));
   // Ensure the resolved path is within the sandbox home
   if (resolved !== SANDBOX_HOME && !resolved.startsWith(SANDBOX_HOME + "/")) {
     return {
@@ -108,8 +108,11 @@ function isForbiddenCommand(command: string, sandboxId: string): string | null {
 
 // ─── Built-in Tools ────────────────────────────────────────────
 
-export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
-  return [
+export function createBuiltinTools(
+  sandboxId: string,
+  runtimeBackend: "local" | "conway" = "conway",
+): AutomatonTool[] {
+  const tools: AutomatonTool[] = [
     // ── VM/Sandbox Tools ──
     {
       name: "exec",
@@ -339,8 +342,10 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
     {
       name: "create_sandbox",
       description:
-        "Create a new Conway sandbox (separate VM) for sub-tasks or testing.",
-      category: "conway",
+        runtimeBackend === "local"
+          ? "Create and start an isolated local WSL2 virtual machine for sub-tasks or testing."
+          : "Create an isolated sandbox for sub-tasks or testing.",
+      category: "vm",
       riskLevel: "caution",
       parameters: {
         type: "object",
@@ -368,9 +373,68 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
       },
     },
     {
+      name: "clone_sandbox",
+      description: "Clone an existing local virtual machine, including its filesystem state.",
+      category: "vm",
+      riskLevel: "caution",
+      parameters: {
+        type: "object",
+        properties: {
+          source_sandbox_id: { type: "string", description: "VM ID to clone" },
+          name: { type: "string", description: "Name for the cloned VM" },
+          vcpu: { type: "number", description: "Requested vCPUs" },
+          memory_mb: { type: "number", description: "Requested memory in MB" },
+          disk_gb: { type: "number", description: "Requested disk size in GB" },
+        },
+        required: ["source_sandbox_id"],
+      },
+      execute: async (args, ctx) => {
+        if (!ctx.conway.cloneSandbox) return "VM cloning is not supported by this backend.";
+        const info = await ctx.conway.cloneSandbox(args.source_sandbox_id as string, {
+          name: args.name as string,
+          vcpu: args.vcpu as number,
+          memoryMb: args.memory_mb as number,
+          diskGb: args.disk_gb as number,
+        });
+        return `VM cloned: ${info.id} from ${args.source_sandbox_id}`;
+      },
+    },
+    {
+      name: "start_sandbox",
+      description: "Start a stopped local virtual machine.",
+      category: "vm",
+      riskLevel: "caution",
+      parameters: {
+        type: "object",
+        properties: { sandbox_id: { type: "string", description: "VM ID to start" } },
+        required: ["sandbox_id"],
+      },
+      execute: async (args, ctx) => {
+        if (!ctx.conway.startSandbox) return "VM start is not supported by this backend.";
+        await ctx.conway.startSandbox(args.sandbox_id as string);
+        return `VM started: ${args.sandbox_id}`;
+      },
+    },
+    {
+      name: "stop_sandbox",
+      description: "Stop a running local virtual machine without deleting its disk.",
+      category: "vm",
+      riskLevel: "caution",
+      parameters: {
+        type: "object",
+        properties: { sandbox_id: { type: "string", description: "VM ID to stop" } },
+        required: ["sandbox_id"],
+      },
+      execute: async (args, ctx) => {
+        if (!ctx.conway.stopSandbox) return "VM stop is not supported by this backend.";
+        await ctx.conway.stopSandbox(args.sandbox_id as string);
+        return `VM stopped: ${args.sandbox_id}`;
+      },
+    },
+    {
       name: "delete_sandbox",
-      description: "Delete a sandbox. Note: sandbox deletion is currently disabled by the Conway API.",
-      category: "conway",
+      description: "Delete a local virtual machine and its virtual disk.",
+      category: "vm",
       riskLevel: "dangerous",
       parameters: {
         type: "object",
@@ -382,14 +446,19 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         },
         required: ["sandbox_id"],
       },
-      execute: async () => {
-        return "Sandbox deletion is disabled. Sandboxes are prepaid and non-refundable.";
+      execute: async (args, ctx) => {
+        const sandboxIdToDelete = args.sandbox_id as string;
+        if (runtimeBackend !== "local") {
+          return "Sandbox deletion is disabled for the legacy remote backend.";
+        }
+        await ctx.conway.deleteSandbox(sandboxIdToDelete);
+        return `Sandbox deleted: ${sandboxIdToDelete}`;
       },
     },
     {
       name: "list_sandboxes",
       description: "List all your sandboxes.",
-      category: "conway",
+      category: "vm",
       riskLevel: "safe",
       parameters: { type: "object", properties: {} },
       execute: async (_args, ctx) => {
@@ -794,7 +863,7 @@ Model: ${ctx.inference.getDefaultModel()}
     {
       name: "heartbeat_ping",
       description:
-        "Publish a heartbeat status ping to Conway. Shows the world you are alive.",
+        "Record a local heartbeat status ping for runtime health monitoring.",
       category: "survival",
       riskLevel: "safe",
       parameters: { type: "object", properties: {} },
@@ -817,7 +886,7 @@ Model: ${ctx.inference.getDefaultModel()}
         };
 
         ctx.db.setKV("last_heartbeat_ping", JSON.stringify(payload));
-        return `Heartbeat published: ${state} | credits: $${(credits / 100).toFixed(2)} | uptime: ${Math.floor(uptimeMs / 1000)}s`;
+        return `Heartbeat recorded: ${state} | compute budget: ${credits} units | uptime: ${Math.floor(uptimeMs / 1000)}s`;
       },
     },
     {
@@ -1600,7 +1669,9 @@ Model: ${ctx.inference.getDefaultModel()}
     {
       name: "spawn_child",
       description:
-        "Spawn a child automaton in a new Conway sandbox with lifecycle tracking.",
+        runtimeBackend === "local"
+          ? "Spawn a child automaton in an isolated local workspace with lifecycle tracking."
+          : "Spawn a child automaton in a new sandbox with lifecycle tracking.",
       category: "replication",
       riskLevel: "dangerous",
       parameters: {
@@ -3209,6 +3280,30 @@ Model: ${ctx.inference.getDefaultModel()}
       },
     },
   ];
+
+  if (runtimeBackend === "local") {
+    const remoteOnly = new Set([
+      "check_credits",
+      "check_usdc_balance",
+      "topup_credits",
+      "transfer_credits",
+      "fund_child",
+      "x402_fetch",
+      "search_domains",
+      "register_domain",
+      "manage_dns",
+      "register_erc8004",
+      "discover_agents",
+      "give_feedback",
+      "check_reputation",
+      "message_child",
+      "send_message",
+    ]);
+    return tools.filter((tool) => !remoteOnly.has(tool.name));
+  }
+
+  const localVmOnly = new Set(["clone_sandbox", "start_sandbox", "stop_sandbox"]);
+  return tools.filter((tool) => !localVmOnly.has(tool.name));
 }
 
 /**

@@ -7,11 +7,12 @@
  * using the same canonical format as the runtime client.
  */
 
-import { loadConfig } from "@conway/automaton/config.js";
+import { loadConfig } from "@lamuh24/automaton/config.js";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { keccak256, toBytes } from "viem";
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 const args = process.argv.slice(3);
 const toAddress = args[0];
@@ -26,7 +27,7 @@ if (!toAddress || !messageText) {
 
 // Load wallet
 const walletPath = path.join(
-  process.env.HOME || "/root",
+  process.env.HOME || process.env.USERPROFILE || os.homedir(),
   ".automaton",
   "wallet.json",
 );
@@ -44,15 +45,19 @@ const account: PrivateKeyAccount = privateKeyToAccount(walletData.privateKey as 
 const config = loadConfig();
 const relayUrl =
   config?.socialRelayUrl ||
-  process.env.SOCIAL_RELAY_URL ||
-  "https://social.conway.tech";
+  process.env.SOCIAL_RELAY_URL;
+
+if (!relayUrl) {
+  console.error("No social relay is configured. Set SOCIAL_RELAY_URL or socialRelayUrl.");
+  process.exit(1);
+}
 
 try {
   // Phase 3.2: Sign the message using the same canonical format as runtime
-  // Canonical: Conway:send:{to_lowercase}:{keccak256(toBytes(content))}:{signed_at_iso}
+  // Canonical: Automaton:send:{to_lowercase}:{keccak256(toBytes(content))}:{signed_at_iso}
   const signedAt = new Date().toISOString();
   const contentHash = keccak256(toBytes(messageText));
-  const canonical = `Conway:send:${toAddress.toLowerCase()}:${contentHash}:${signedAt}`;
+  const canonical = `Automaton:send:${toAddress.toLowerCase()}:${contentHash}:${signedAt}`;
   const signature = await account.signMessage({ message: canonical });
 
   const resp = await fetch(`${relayUrl}/v1/messages`, {

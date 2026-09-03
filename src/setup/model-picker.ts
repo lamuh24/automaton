@@ -10,15 +10,14 @@
 import chalk from "chalk";
 import { loadConfig, saveConfig, resolvePath } from "../config.js";
 import { createDatabase } from "../state/database.js";
-import { ModelRegistry } from "../inference/registry.js";
-import { discoverOllamaModels } from "../ollama/discover.js";
+import { ModelRegistry, configureLocalModelRegistry } from "../inference/registry.js";
 import type { ModelEntry } from "../types.js";
 import { promptOptional, closePrompts } from "./prompts.js";
 
 const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  conway: "Conway",
+  conway: "Legacy",
   ollama: "Ollama",
   other: "Other",
 };
@@ -36,12 +35,7 @@ export async function runModelPicker(): Promise<void> {
   // Seed static baseline + discover Ollama models
   const registry = new ModelRegistry(db.raw);
   registry.initialize();
-
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
-  if (ollamaBaseUrl) {
-    console.log(chalk.dim(`  Checking Ollama at ${ollamaBaseUrl}...`));
-    await discoverOllamaModels(ollamaBaseUrl, db.raw);
-  }
+  configureLocalModelRegistry(registry, config.inferenceModel || "gemma-local");
 
   const models = registry.getAll().filter((m) => m.enabled);
 

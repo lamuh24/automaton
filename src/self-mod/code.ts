@@ -20,6 +20,7 @@ import type {
   AutomatonDatabase,
 } from "../types.js";
 import { logModification } from "./audit-log.js";
+import { resolveHomePath } from "../utils/home.js";
 
 // ─── IMMUTABLE SAFETY INVARIANTS ─────────────────────────────
 // These are hard-coded and CANNOT be changed by the agent.
@@ -125,7 +126,7 @@ function resolveAndValidatePath(filePath: string): string | null {
     // Step 1: Resolve ~ to home
     let resolved = filePath;
     if (resolved.startsWith("~")) {
-      resolved = path.join(process.env.HOME || "/root", resolved.slice(1));
+      resolved = resolveHomePath(resolved);
     }
 
     // Step 2: Resolve to absolute path (handles .. and relative paths)
@@ -157,28 +158,36 @@ function resolveAndValidatePath(filePath: string): string | null {
  */
 export function isProtectedFile(filePath: string): boolean {
   const resolved = path.resolve(filePath);
+  const candidates = [filePath, resolved].map((candidate) =>
+    candidate.replace(/\\/g, "/").replace(/\/+$/, ""),
+  );
 
   // Check against protected file patterns using path-segment matching
   for (const pattern of PROTECTED_FILES) {
-    const patternResolved = path.resolve(pattern);
+    const normalizedPattern = pattern.replace(/\\/g, "/");
+    const patternResolved = path.resolve(pattern).replace(/\\/g, "/");
     // Exact match on resolved paths
-    if (resolved === patternResolved) return true;
+    if (candidates.includes(patternResolved)) return true;
     // Match by path suffix: the resolved path ends with /pattern
-    if (resolved.endsWith(path.sep + pattern)) return true;
-    // Also check multi-segment patterns (e.g., "self-mod/code.ts")
-    if (pattern.includes("/") && resolved.endsWith(path.sep + pattern.replace(/\//g, path.sep))) return true;
+    if (candidates.some((candidate) => candidate.endsWith("/" + normalizedPattern))) return true;
   }
 
   // Check against blocked directory patterns using path-segment matching
   for (const pattern of BLOCKED_DIRECTORY_PATTERNS) {
-    // Check if any path segment matches the blocked directory
-    if (resolved.includes(path.sep + pattern + path.sep) ||
-        resolved.endsWith(path.sep + pattern) ||
-        resolved === pattern) {
-      return true;
+    const normalizedPattern = pattern.replace(/\\/g, "/");
+    if (normalizedPattern.startsWith("/")) {
+      if (candidates.some((candidate) =>
+        candidate === normalizedPattern || candidate.startsWith(normalizedPattern + "/"),
+      )) {
+        return true;
+      }
+      continue;
     }
-    // Handle absolute patterns like /etc/systemd
-    if (pattern.startsWith("/") && resolved.startsWith(pattern)) {
+
+    // Check if any path segment matches the blocked directory
+    if (candidates.some((candidate) =>
+      candidate.split("/").includes(normalizedPattern),
+    )) {
       return true;
     }
   }

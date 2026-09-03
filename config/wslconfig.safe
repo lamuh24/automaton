@@ -1,0 +1,12 @@
+[wsl2]
+# Bound the shared WSL2 utility VM so local agents cannot starve Windows or Gemma.
+memory=6GB
+processors=4
+swap=4GB
+swapFile=E:\\VM-Platform\\wsl-swap.vhdx
+localhostForwarding=true
+nestedVirtualization=false
+
+[experimental]
+# Keep newly-created WSL virtual disks sparse to reduce E: usage.
+sparseVhd=true

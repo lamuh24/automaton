@@ -1,4 +1,4 @@
-declare module "@conway/automaton/config.js" {
+declare module "@lamuh24/automaton/config.js" {
   export interface AutomatonCliConfig {
     name: string;
     walletAddress: string;
@@ -8,16 +8,19 @@ declare module "@conway/automaton/config.js" {
     inferenceModel: string;
     conwayApiUrl: string;
     conwayApiKey: string;
+    runtimeBackend?: "local" | "conway";
+    localComputeBudgetCents?: number;
     openaiApiKey?: string;
     anthropicApiKey?: string;
     socialRelayUrl?: string;
   }
 
   export function loadConfig(): AutomatonCliConfig | null;
+  export function saveConfig(config: AutomatonCliConfig): void;
   export function resolvePath(p: string): string;
 }
 
-declare module "@conway/automaton/state/database.js" {
+declare module "@lamuh24/automaton/state/database.js" {
   export interface CliToolCall {
     name: string;
     result: string;
