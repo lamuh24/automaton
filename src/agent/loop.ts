@@ -261,6 +261,7 @@ export async function runAgentLoop(
         },
         config: {
           ...config,
+          disableSpawn: opportunityResearchMode,
           spawnAgent: async (task: any) => {
             // Try Conway sandbox spawn first (production)
             try {

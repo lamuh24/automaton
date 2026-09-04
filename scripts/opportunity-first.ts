@@ -151,7 +151,9 @@ function activateAgent(): Record<string, unknown> {
          WHERE goal_id != ? AND status IN ('pending', 'assigned', 'running', 'blocked')`,
       ).run(now, goal.id).changes;
       const staleWorkers = db.prepare(
-        "UPDATE children SET status = 'failed' WHERE address LIKE 'local://%' AND status IN ('running', 'healthy')",
+        `UPDATE children SET status = 'failed'
+         WHERE (address LIKE 'local://%' OR sandbox_id LIKE 'automaton-child-%')
+           AND status NOT IN ('failed', 'dead', 'cleaned_up')`,
       ).run().changes;
 
       db.prepare("DELETE FROM kv WHERE key = 'orchestrator.todo_md' OR key LIKE 'orchestrator.plan.%'").run();
