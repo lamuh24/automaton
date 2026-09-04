@@ -74,6 +74,19 @@ const MAX_TOOL_CALLS_PER_TURN = 10;
 const MAX_CONSECUTIVE_ERRORS = 5;
 const MAX_REPETITIVE_TURNS = 3;
 const IDLE_SLEEP_MS = getIdleSleepMs();
+const OPPORTUNITY_RESEARCH_TOOLS = new Set([
+  "exec",
+  "write_file",
+  "read_file",
+  "sleep",
+  "system_synopsis",
+  "remember_fact",
+  "recall_facts",
+  "list_goals",
+  "get_plan",
+  "complete_task",
+  "orchestrator_status",
+]);
 
 export interface AgentLoopOptions {
   identity: AutomatonIdentity;
@@ -100,12 +113,17 @@ export async function runAgentLoop(
   const { identity, config, db, conway, inference, social, skills, policyEngine, spendTracker, onStateChange, onTurnComplete, ollamaBaseUrl } =
     options;
 
-  const builtinTools = createBuiltinTools(
+  const allBuiltinTools = createBuiltinTools(
     identity.sandboxId,
     config.runtimeBackend || "local",
   );
   const installedTools = loadInstalledTools(db);
-  const tools = [...builtinTools, ...installedTools];
+  const opportunityResearchMode = Boolean(db.raw.prepare(
+    "SELECT 1 FROM goals WHERE status = 'active' AND strategy = 'opportunity-first-research-only' LIMIT 1",
+  ).get());
+  const tools = opportunityResearchMode
+    ? allBuiltinTools.filter((tool) => OPPORTUNITY_RESEARCH_TOOLS.has(tool.name))
+    : [...allBuiltinTools, ...installedTools];
   const toolContext: ToolContext = {
     identity,
     config,

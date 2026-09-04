@@ -88,13 +88,16 @@ is below that threshold, the runtime selects the non-system local drive with the
 most free space (for example `E:\Automaton`) for VM images and virtual disks.
 `AUTOMATON_WORKSPACE_ROOT` and `AUTOMATON_VM_IMAGE_ROOT` can override those paths.
 
-Local inference defaults to LM Studio at `http://127.0.0.1:1234`. Automaton uses
-LM Studio's bundled `lms.exe` to load and serve Gemma automatically when needed.
+The Windows launcher serves Gemma on `http://127.0.0.1:1235`. It uses LM Studio's
+bundled llama.cpp backend with model layers and the KV cache kept off the GPU;
+the LM Studio command-line loader remains the compatibility fallback.
 `AUTOMATON_INFERENCE_URL` can override the loopback URL, but no API key is used.
 `AUTOMATON_GEMMA_CONTEXT_LENGTH` can select 4,096 through 131,072 tokens when the
 machine has enough free memory.
 The always-on profile keeps only a compact recent context and normally sleeps for
 15 minutes between idle cycles; scheduled heartbeats can still wake it earlier.
+Opportunity-first mode also exposes only the small set of local research, file,
+memory, goal-status, and sleep tools needed for the job.
 The `--doctor` command verifies the host shell, Gemma tool calls, Git cloning,
 filesystem mapping, localhost ports, and a complete create/clone/stop/start/delete
 WSL2 VM lifecycle without using cloud services.

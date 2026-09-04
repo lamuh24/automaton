@@ -1,4 +1,4 @@
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,7 +33,7 @@ export async function ensureLocalGemmaReady(options?: {
   const endpointReady = await endpointHasModel(endpoint, model);
   const lmsPath = findLmsExecutable();
 
-  if (endpointReady && (!lmsPath || model !== LOCAL_GEMMA_MODEL)) {
+  if (endpointReady) {
     return { endpoint, model, runner: lmsPath || "local OpenAI-compatible server", started: false };
   }
 
@@ -58,6 +58,39 @@ export async function ensureLocalGemmaReady(options?: {
   // an unsafe GPU profile set manually in LM Studio.
   if (modelLoaded) {
     await runLms(lmsPath, ["unload", model]);
+  }
+
+  const directRunner = findLowVramLlamaServer();
+  const directModel = findLocalGemmaModelFile();
+  if (process.platform === "win32" && directRunner && directModel) {
+    const url = new URL(endpoint);
+    const port = Number(url.port || 80);
+    const child = spawn(directRunner, [
+      "--model", directModel,
+      "--host", url.hostname,
+      "--port", String(port),
+      "--alias", model,
+      "--ctx-size", String(LOCAL_GEMMA_CONTEXT_LENGTH),
+      "--n-gpu-layers", "0",
+      "--no-kv-offload",
+      "--parallel", String(LOCAL_GEMMA_PARALLELISM),
+      "--threads", String(Math.max(1, Math.min(6, os.cpus().length))),
+      "--jinja",
+      "--no-webui",
+    ], {
+      detached: true,
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    child.unref();
+
+    for (let attempt = 0; attempt < 90; attempt++) {
+      if (await endpointHasModel(endpoint, model)) {
+        return { endpoint, model, runner: directRunner, started: true };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    throw new Error(`Low-VRAM local Gemma did not become ready at ${endpoint}`);
   }
 
   await runLms(lmsPath, [
@@ -140,6 +173,47 @@ function findLmsExecutable(): string | null {
     path.join(getHomeDir(), "AppData", "Local", "Programs", "LM Studio", "resources", "app", ".webpack", "lms.exe"),
   ];
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function findLowVramLlamaServer(): string | null {
+  const root = path.join(getHomeDir(), ".lmstudio", "extensions", "backends");
+  if (!fs.existsSync(root)) return null;
+  const candidates = fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith("llama.cpp-win-x86_64-vulkan-avx2-"))
+    .map((entry) => ({
+      version: entry.name.slice("llama.cpp-win-x86_64-vulkan-avx2-".length),
+      executable: path.join(root, entry.name, "llama-server.exe"),
+    }))
+    .filter((entry) => fs.existsSync(entry.executable))
+    .sort((a, b) => compareVersions(b.version, a.version));
+  return candidates[0]?.executable || null;
+}
+
+function findLocalGemmaModelFile(): string | null {
+  const root = path.join(getHomeDir(), ".lmstudio", "models");
+  if (!fs.existsSync(root)) return null;
+  const matches: string[] = [];
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const candidate = path.join(current, entry.name);
+      if (entry.isDirectory()) pending.push(candidate);
+      else if (/gemma-4-e4b-it.*\.gguf$/i.test(entry.name) && !/mmproj/i.test(entry.name)) matches.push(candidate);
+    }
+  }
+  matches.sort((a, b) => Number(/q4_k_m/i.test(b)) - Number(/q4_k_m/i.test(a)) || a.localeCompare(b));
+  return matches[0] || null;
+}
+
+function compareVersions(a: string, b: string): number {
+  const left = a.split(".").map((part) => Number(part) || 0);
+  const right = b.split(".").map((part) => Number(part) || 0);
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const difference = (left[index] || 0) - (right[index] || 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
 }
 
 async function endpointHasModel(endpoint: string, model: string): Promise<boolean> {
