@@ -17,7 +17,9 @@ import type {
 import { DEFAULT_TOKEN_BUDGET } from "../types.js";
 import { createTokenCounter } from "../memory/context-manager.js";
 
-const MAX_CONTEXT_TURNS = 100;
+// A compact history keeps the always-on local model responsive and leaves room
+// for tool schemas and output inside the 24K default context window.
+const MAX_CONTEXT_TURNS = 12;
 const SUMMARY_THRESHOLD = 15;
 
 let tokenCounter: ReturnType<typeof createTokenCounter> | null = null;

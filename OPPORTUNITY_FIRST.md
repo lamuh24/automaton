@@ -10,10 +10,14 @@ Initialize and inspect the local ledger:
 
 ```bat
 opportunity-first.cmd initialize
+opportunity-first.cmd activate
 opportunity-first.cmd add "Example service" 25 "https://example.com" "Why it fits and what must be verified"
 opportunity-first.cmd list
 opportunity-first.cmd status
 ```
+
+`activate` creates or resumes the research-only opportunity goal. It pauses,
+but does not delete, older active goals and retires stale local-worker records.
 
 Only the creator should record money that was actually received and independently verified:
 
@@ -28,4 +32,3 @@ set AUTOMATON_CRYPTO_APPROVAL=LAMUH_APPROVES_CRYPTO_RESEARCH
 ```
 
 That phrase unlocks research and paper simulation only. This repository contains no live exchange integration and cannot place real-money orders.
-

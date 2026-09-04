@@ -524,11 +524,11 @@ describe("update_genesis_prompt tool hardening", () => {
 
 describe("DEFAULT_TOKEN_BUDGET", () => {
   it("has expected values from spec", () => {
-    expect(DEFAULT_TOKEN_BUDGET.total).toBe(126_976);
-    expect(DEFAULT_TOKEN_BUDGET.systemPrompt).toBe(20_000);
-    expect(DEFAULT_TOKEN_BUDGET.recentTurns).toBe(80_000);
-    expect(DEFAULT_TOKEN_BUDGET.toolResults).toBe(16_000);
-    expect(DEFAULT_TOKEN_BUDGET.memoryRetrieval).toBe(10_976);
+    expect(DEFAULT_TOKEN_BUDGET.total).toBe(20_480);
+    expect(DEFAULT_TOKEN_BUDGET.systemPrompt).toBe(10_000);
+    expect(DEFAULT_TOKEN_BUDGET.recentTurns).toBe(6_000);
+    expect(DEFAULT_TOKEN_BUDGET.toolResults).toBe(2_000);
+    expect(DEFAULT_TOKEN_BUDGET.memoryRetrieval).toBe(2_480);
   });
 
   it("components sum to total", () => {

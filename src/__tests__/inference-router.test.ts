@@ -721,11 +721,11 @@ describe("Task Timeouts", () => {
   });
 
   it("agent_turn has 120s timeout", () => {
-    expect(TASK_TIMEOUTS.agent_turn).toBe(120_000);
+    expect(TASK_TIMEOUTS.agent_turn).toBe(300_000);
   });
 
   it("planning has 120s timeout", () => {
-    expect(TASK_TIMEOUTS.planning).toBe(120_000);
+    expect(TASK_TIMEOUTS.planning).toBe(300_000);
   });
 });
 

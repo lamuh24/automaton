@@ -898,12 +898,12 @@ export interface TokenBudget {
 }
 
 export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
-  // Gemma 4 E4B exposes a 131,072-token context. Reserve 4,096 for output.
-  total: 126_976,
-  systemPrompt: 20_000,
-  recentTurns: 80_000,
-  toolResults: 16_000,
-  memoryRetrieval: 10_976,
+  // Fit the lean local profile while reserving 4,096 tokens for output.
+  total: 20_480,
+  systemPrompt: 10_000,
+  recentTurns: 6_000,
+  toolResults: 2_000,
+  memoryRetrieval: 2_480,
 };
 
 // ─── Phase 1: Runtime Reliability ───────────────────────────────
@@ -1162,11 +1162,11 @@ export interface MemoryBudget {
 }
 
 export const DEFAULT_MEMORY_BUDGET: MemoryBudget = {
-  workingMemoryTokens: 1500,
-  episodicMemoryTokens: 3000,
-  semanticMemoryTokens: 3000,
-  proceduralMemoryTokens: 1500,
-  relationshipMemoryTokens: 1000,
+  workingMemoryTokens: 500,
+  episodicMemoryTokens: 800,
+  semanticMemoryTokens: 800,
+  proceduralMemoryTokens: 500,
+  relationshipMemoryTokens: 400,
 };
 
 // === Phase 2.3: Inference & Model Strategy Types ===

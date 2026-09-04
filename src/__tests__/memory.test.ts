@@ -573,7 +573,7 @@ describe("MemoryBudgetManager", () => {
 
   it("should calculate total budget", () => {
     const budget = new MemoryBudgetManager(DEFAULT_MEMORY_BUDGET);
-    expect(budget.getTotalBudget()).toBe(10000); // 1500+3000+3000+1500+1000
+    expect(budget.getTotalBudget()).toBe(3000); // lean always-on local profile
   });
 
   it("should estimate tokens from text", () => {

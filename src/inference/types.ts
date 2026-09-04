@@ -40,8 +40,8 @@ export const TASK_TIMEOUTS: Record<string, number> = {
   heartbeat_triage: 15_000,
   safety_check: 30_000,
   summarization: 60_000,
-  agent_turn: 120_000,
-  planning: 120_000,
+  agent_turn: 300_000,
+  planning: 300_000,
 };
 
 // === Static Model Baseline ===

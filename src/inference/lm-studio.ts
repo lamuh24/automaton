@@ -10,7 +10,9 @@ const execFile = promisify(execFileCallback);
 export const LOCAL_GEMMA_API_URL = "http://127.0.0.1:1234";
 export const LOCAL_GEMMA_MODEL = "gemma-local";
 export const LOCAL_GEMMA_MODEL_KEY = "google/gemma-4-e4b";
-export const LOCAL_GEMMA_CONTEXT_LENGTH = 131_072;
+export const LOCAL_GEMMA_CONTEXT_LENGTH = parseContextLength(
+  process.env.AUTOMATON_GEMMA_CONTEXT_LENGTH,
+);
 export const LOCAL_GEMMA_GPU_OFFLOAD = "off";
 export const LOCAL_GEMMA_PARALLELISM = 1;
 
@@ -46,7 +48,7 @@ export async function ensureLocalGemmaReady(options?: {
     );
   }
 
-  assertLocalInferenceCapacity();
+  assertLocalInferenceCapacity(LOCAL_GEMMA_CONTEXT_LENGTH);
 
   const loaded = await runLms(lmsPath, ["ps"]);
   const loadedLine = loaded.stdout.split(/\r?\n/).find((line) => line.includes(model)) || "";
@@ -182,12 +184,12 @@ function isLoopback(value: string): boolean {
   }
 }
 
-function assertLocalInferenceCapacity(): void {
-  const minimumFreeRam = 14 * 1024 ** 3;
+function assertLocalInferenceCapacity(contextLength: number): void {
+  const minimumFreeRam = (contextLength > 65_536 ? 14 : contextLength > 32_768 ? 10 : 8) * 1024 ** 3;
   const freeRam = os.freemem();
   if (freeRam < minimumFreeRam) {
     throw new Error(
-      `Gemma requires at least 14 GB free RAM before its CPU-only maximum-context load; ` +
+      `Gemma requires at least ${(minimumFreeRam / 1024 ** 3).toFixed(0)} GB free RAM before its CPU-only ${contextLength.toLocaleString()}-token context load; ` +
       `${(freeRam / 1024 ** 3).toFixed(1)} GB is available. Close memory-heavy apps and retry.`,
     );
   }
@@ -207,4 +209,12 @@ function assertLocalInferenceCapacity(): void {
       if (error instanceof Error && error.message.includes("Windows system drive")) throw error;
     }
   }
+}
+
+function parseContextLength(value: string | undefined): number {
+  const parsed = Number(value || 24_576);
+  if (!Number.isSafeInteger(parsed) || parsed < 4_096 || parsed > 131_072) {
+    return 24_576;
+  }
+  return parsed;
 }

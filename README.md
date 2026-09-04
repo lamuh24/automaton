@@ -69,8 +69,8 @@ commands, filesystem access, Git operations, localhost ports, and isolated child
 WSL2 virtual machines under `~/.automaton/workspaces`. Each child gets its own
 Linux distribution and virtual disk; VMs can be created, cloned, started, stopped,
 listed, and deleted. Thinking runs through the installed
-`google/gemma-4-e4b` model in LM Studio, loaded as `gemma-local` with its maximum
-131,072-token context window. It is forced to CPU-only mode with one inference slot
+`google/gemma-4-e4b` model in LM Studio, loaded as `gemma-local` with a lean
+24,576-token context window by default. It is forced to CPU-only mode with one inference slot
 to avoid GPU-driver timeouts and excessive KV-cache multiplication. No API key,
 cloud service, or credit balance is required.
 
@@ -91,6 +91,10 @@ most free space (for example `E:\Automaton`) for VM images and virtual disks.
 Local inference defaults to LM Studio at `http://127.0.0.1:1234`. Automaton uses
 LM Studio's bundled `lms.exe` to load and serve Gemma automatically when needed.
 `AUTOMATON_INFERENCE_URL` can override the loopback URL, but no API key is used.
+`AUTOMATON_GEMMA_CONTEXT_LENGTH` can select 4,096 through 131,072 tokens when the
+machine has enough free memory.
+The always-on profile keeps only a compact recent context and normally sleeps for
+15 minutes between idle cycles; scheduled heartbeats can still wake it earlier.
 The `--doctor` command verifies the host shell, Gemma tool calls, Git cloning,
 filesystem mapping, localhost ports, and a complete create/clone/stop/start/delete
 WSL2 VM lifecycle without using cloud services.

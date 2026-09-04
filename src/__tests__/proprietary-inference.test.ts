@@ -15,9 +15,9 @@ afterEach(() => {
 });
 
 describe("proprietary inference connection", () => {
-  it("uses the installed Gemma identifier and maximum context", () => {
+  it("uses the installed Gemma identifier and practical default context", () => {
     expect(LOCAL_GEMMA_MODEL).toBe("gemma-local");
-    expect(LOCAL_GEMMA_CONTEXT_LENGTH).toBe(131_072);
+    expect(LOCAL_GEMMA_CONTEXT_LENGTH).toBe(24_576);
     expect(LOCAL_GEMMA_GPU_OFFLOAD).toBe("off");
     expect(LOCAL_GEMMA_PARALLELISM).toBe(1);
     expect(normalizeApiBase("http://127.0.0.1:1234/v1")).toBe("http://127.0.0.1:1234");

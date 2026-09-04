@@ -64,14 +64,16 @@ import { SimpleAgentTracker, SimpleFundingProtocol } from "../orchestration/simp
 import { HarnessRegistry } from "./harness-registry.js";
 import { createWorkerInferenceBridge } from "./worker-inference-bridge.js";
 import { ProviderRegistry, type ProviderConfig } from "../inference/provider-registry.js";
-import { LOCAL_GEMMA_API_URL, normalizeApiBase } from "../inference/lm-studio.js";
+import { LOCAL_GEMMA_API_URL, LOCAL_GEMMA_CONTEXT_LENGTH, normalizeApiBase } from "../inference/lm-studio.js";
 import { UnifiedInferenceClient } from "../inference/inference-client.js";
 import { isIdleOnlyTool } from "./idle-only-tools.js";
+import { getIdleSleepMs } from "../runtime-profile.js";
 
 const logger = createLogger("loop");
 const MAX_TOOL_CALLS_PER_TURN = 10;
 const MAX_CONSECUTIVE_ERRORS = 5;
 const MAX_REPETITIVE_TURNS = 3;
+const IDLE_SLEEP_MS = getIdleSleepMs();
 
 export interface AgentLoopOptions {
   identity: AutomatonIdentity;
@@ -578,7 +580,7 @@ export async function runAgentLoop(
             config,
             "[ORCHESTRATOR] All delegated work is active and no self-assigned parent task remains. Sleeping to avoid idle loop.",
           );
-          db.setKV("sleep_until", new Date(Date.now() + 60_000).toISOString());
+          db.setKV("sleep_until", new Date(Date.now() + IDLE_SLEEP_MS).toISOString());
           db.setAgentState("sleeping");
           onStateChange?.("sleeping");
           running = false;
@@ -875,7 +877,7 @@ export async function runAgentLoop(
         idleTurnCount++;
         if (idleTurnCount >= MAX_IDLE_TURNS) {
           log(config, `[IDLE] ${idleTurnCount} consecutive idle turns with no work. Entering sleep.`);
-          db.setKV("sleep_until", new Date(Date.now() + 60_000).toISOString());
+          db.setKV("sleep_until", new Date(Date.now() + IDLE_SLEEP_MS).toISOString());
           db.setAgentState("sleeping");
           onStateChange?.("sleeping");
           running = false;
@@ -909,7 +911,7 @@ export async function runAgentLoop(
         log(config, "[IDLE] No pending inputs. Entering brief sleep.");
         db.setKV(
           "sleep_until",
-          new Date(Date.now() + 60_000).toISOString(),
+          new Date(Date.now() + IDLE_SLEEP_MS).toISOString(),
         );
         db.setAgentState("sleeping");
         onStateChange?.("sleeping");
@@ -962,7 +964,7 @@ function createLocalOnlyProviderRegistry(baseUrl: string, modelId: string): Prov
     .map((tier) => ({
       id: modelId,
       tier,
-      contextWindow: 131_072,
+      contextWindow: LOCAL_GEMMA_CONTEXT_LENGTH,
       maxOutputTokens: 4096,
       costPerInputToken: 0,
       costPerOutputToken: 0,

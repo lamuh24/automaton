@@ -47,9 +47,11 @@ import { prettySink } from "./observability/pretty-sink.js";
 import { bootstrapTopup } from "./conway/topup.js";
 import { randomUUID } from "crypto";
 import { keccak256, toHex } from "viem";
+import { getIdleSleepMs } from "./runtime-profile.js";
 
 const logger = createLogger("main");
 const VERSION = "0.2.1";
+const IDLE_SLEEP_MS = getIdleSleepMs();
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -651,7 +653,7 @@ async function run(): Promise<void> {
         const sleepUntilStr = db.getKV("sleep_until");
         const sleepUntil = sleepUntilStr
           ? new Date(sleepUntilStr).getTime()
-          : Date.now() + 60_000;
+          : Date.now() + IDLE_SLEEP_MS;
         const sleepMs = Math.max(sleepUntil - Date.now(), 10_000);
         logger.info(
           `[${new Date().toISOString()}] Sleeping for ${Math.round(sleepMs / 1000)}s`,

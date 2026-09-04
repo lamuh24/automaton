@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import Database from "better-sqlite3";
+import { ulid } from "ulid";
 import {
   evaluateEarningsGate,
   formatLocalDate,
@@ -21,6 +23,9 @@ interface Opportunity {
 const root = process.env.AUTOMATON_OPPORTUNITY_ROOT || path.join(os.homedir(), ".automaton", "opportunity-first");
 const opportunitiesPath = path.join(root, "opportunities.jsonl");
 const earningsPath = path.join(root, "earnings.jsonl");
+const agentDbPath = process.env.AUTOMATON_DB_PATH || path.join(os.homedir(), ".automaton", "state.db");
+const OPPORTUNITY_STRATEGY = "opportunity-first-research-only";
+const OPPORTUNITY_GOAL_TITLE = "Research legitimate non-trading income opportunities";
 
 function ensureFiles(): void {
   fs.mkdirSync(root, { recursive: true });
@@ -72,10 +77,84 @@ function status(): Record<string, unknown> {
   };
 }
 
+function activateAgent(): Record<string, unknown> {
+  if (!fs.existsSync(agentDbPath)) {
+    throw new Error(`Automaton state database was not found at ${agentDbPath}. Run local setup first.`);
+  }
+
+  const db = new Database(agentDbPath);
+  db.pragma("foreign_keys = ON");
+  try {
+    return db.transaction(() => {
+      const now = new Date().toISOString();
+      let goal = db.prepare(
+        "SELECT id FROM goals WHERE strategy = ? ORDER BY created_at DESC LIMIT 1",
+      ).get(OPPORTUNITY_STRATEGY) as { id: string } | undefined;
+
+      if (!goal) {
+        goal = { id: ulid() };
+        db.prepare(
+          `INSERT INTO goals
+           (id, title, description, status, strategy, expected_revenue_cents,
+            actual_revenue_cents, created_at, deadline, completed_at)
+           VALUES (?, ?, ?, 'active', ?, 2000, 0, ?, NULL, NULL)`,
+        ).run(
+          goal.id,
+          OPPORTUNITY_GOAL_TITLE,
+          [
+            "Research legitimate, legal, zero-upfront-cost ways Lamuh could earn at least $20 per day outside crypto.",
+            "This stage is research and analysis only: do not contact anyone, create accounts, accept terms, publish, spend money, perform paid work, or claim estimated income as earned income.",
+            "Exclude crypto, securities, gambling, lending, mining, arbitrage, and anything deceptive or against platform rules.",
+            "Find at least 10 evidence-backed candidates, compare realistic net earnings, time-to-first-dollar, requirements, risks, and repeatability, then rank the best three.",
+            "Save a clear report in the workspace and identify each next action that requires Lamuh's approval.",
+          ].join(" "),
+          OPPORTUNITY_STRATEGY,
+          now,
+        );
+      } else {
+        db.prepare(
+          "UPDATE goals SET status = 'active', completed_at = NULL WHERE id = ?",
+        ).run(goal.id);
+      }
+
+      const paused = db.prepare(
+        "UPDATE goals SET status = 'paused', completed_at = NULL WHERE status = 'active' AND id != ?",
+      ).run(goal.id).changes;
+      const cancelledTasks = db.prepare(
+        `UPDATE task_graph
+         SET status = 'cancelled', assigned_to = NULL, completed_at = ?
+         WHERE goal_id != ? AND status IN ('pending', 'assigned', 'running', 'blocked')`,
+      ).run(now, goal.id).changes;
+      const staleWorkers = db.prepare(
+        "UPDATE children SET status = 'failed' WHERE address LIKE 'local://%' AND status IN ('running', 'healthy')",
+      ).run().changes;
+
+      db.prepare("DELETE FROM kv WHERE key = 'orchestrator.todo_md' OR key LIKE 'orchestrator.plan.%'").run();
+      db.prepare(
+        "INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES ('orchestrator.state', ?, datetime('now'))",
+      ).run(JSON.stringify({ phase: "idle", goalId: null, replanCount: 0, failedTaskId: null, failedError: null }));
+      db.prepare("DELETE FROM kv WHERE key = 'sleep_until'").run();
+
+      return {
+        status: "opportunity-agent-activated",
+        goalId: goal.id,
+        goal: OPPORTUNITY_GOAL_TITLE,
+        pausedPreviousGoals: paused,
+        cancelledPreviousTasks: cancelledTasks,
+        retiredStaleLocalWorkers: staleWorkers,
+        restrictions: "Research only; no outreach, accounts, publishing, spending, commitments, crypto, or trading.",
+      };
+    })();
+  } finally {
+    db.close();
+  }
+}
+
 function usage(): never {
   throw new Error([
     "Usage:",
     "  opportunity-first initialize",
+    "  opportunity-first activate",
     "  opportunity-first add \"title\" estimatedDailyUsd url \"notes\"",
     "  opportunity-first list",
     "  opportunity-first record-earning YYYY-MM-DD amountUsd \"source\" \"evidence\"",
@@ -89,6 +168,10 @@ function main(): void {
 
   if (command === "initialize") {
     console.log(JSON.stringify({ status: "initialized", root, ...status() }, null, 2));
+    return;
+  }
+  if (command === "activate") {
+    console.log(JSON.stringify(activateAgent(), null, 2));
     return;
   }
   if (command === "add") {
@@ -142,4 +225,3 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }
-

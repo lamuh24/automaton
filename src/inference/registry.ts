@@ -6,6 +6,7 @@
  */
 
 import type BetterSqlite3 from "better-sqlite3";
+import { LOCAL_GEMMA_CONTEXT_LENGTH } from "./lm-studio.js";
 import type { ModelEntry, ModelRegistryRow } from "../types.js";
 import { STATIC_MODEL_BASELINE } from "./types.js";
 import {
@@ -208,7 +209,7 @@ export function configureLocalModelRegistry(
     costPer1kInput: 0,
     costPer1kOutput: 0,
     maxTokens: 4096,
-    contextWindow: 131_072,
+    contextWindow: LOCAL_GEMMA_CONTEXT_LENGTH,
     supportsTools: true,
     supportsVision: false,
     parameterStyle: "max_tokens",
