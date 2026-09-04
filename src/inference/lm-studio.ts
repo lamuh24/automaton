@@ -74,7 +74,7 @@ export async function ensureLocalGemmaReady(options?: {
       "--n-gpu-layers", "0",
       "--no-kv-offload",
       "--parallel", String(LOCAL_GEMMA_PARALLELISM),
-      "--threads", String(Math.max(1, Math.min(6, os.cpus().length))),
+      "--threads", String(Math.max(1, Math.min(10, os.cpus().length))),
       "--jinja",
       "--no-webui",
     ], {
