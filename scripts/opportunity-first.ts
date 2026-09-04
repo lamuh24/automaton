@@ -117,6 +117,31 @@ function activateAgent(): Record<string, unknown> {
         ).run(goal.id);
       }
 
+      const existingResearchTask = db.prepare(
+        `SELECT id FROM task_graph
+         WHERE goal_id = ? AND status IN ('pending', 'assigned', 'running', 'blocked')
+         LIMIT 1`,
+      ).get(goal.id) as { id: string } | undefined;
+      let researchTaskId = existingResearchTask?.id;
+      if (!researchTaskId) {
+        researchTaskId = ulid();
+        db.prepare(
+          `INSERT INTO task_graph
+           (id, parent_id, goal_id, title, description, status, assigned_to,
+            agent_role, priority, dependencies, result, estimated_cost_cents,
+            actual_cost_cents, max_retries, retry_count, timeout_ms, created_at,
+            started_at, completed_at)
+           VALUES (?, NULL, ?, ?, ?, 'pending', NULL, 'generalist', 100, '[]',
+                   NULL, 0, 0, 3, 0, 3600000, ?, NULL, NULL)`,
+        ).run(
+          researchTaskId,
+          goal.id,
+          "Produce the first non-trading opportunity shortlist",
+          "Research at least 10 legitimate zero-upfront-cost income opportunities, rank the best three, and save an evidence-backed report. Research only. Do not contact anyone, create accounts, publish, spend, make commitments, perform paid work, or use crypto/trading.",
+          now,
+        );
+      }
+
       const paused = db.prepare(
         "UPDATE goals SET status = 'paused', completed_at = NULL WHERE status = 'active' AND id != ?",
       ).run(goal.id).changes;
@@ -138,6 +163,7 @@ function activateAgent(): Record<string, unknown> {
       return {
         status: "opportunity-agent-activated",
         goalId: goal.id,
+        researchTaskId,
         goal: OPPORTUNITY_GOAL_TITLE,
         pausedPreviousGoals: paused,
         cancelledPreviousTasks: cancelledTasks,
