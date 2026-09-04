@@ -533,7 +533,10 @@ export async function runAgentLoop(
 
       // Build context — filter out purely idle turns (only status checks)
       // to prevent the model from continuing a status-check pattern
-      const allTurns = db.getRecentTurns(100);
+      const opportunityActivatedAt = db.getKV("opportunity_first.activated_at");
+      const allTurns = db.getRecentTurns(100).filter(
+        (turn) => !opportunityActivatedAt || turn.timestamp >= opportunityActivatedAt,
+      );
       const meaningfulTurns = allTurns.filter((t) => {
         if (t.toolCalls.length === 0) return true; // text-only turns are meaningful
         return t.toolCalls.some((tc) => !isIdleOnlyTool(tc.name));

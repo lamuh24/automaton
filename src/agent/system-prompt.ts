@@ -829,13 +829,28 @@ What will you do first? Consider:
 5. Begin working toward your goals`;
   }
 
-  const lastTurns = db.getRecentTurns(3);
+  const opportunityActivatedAt = db.getKV("opportunity_first.activated_at");
+  const lastTurns = db.getRecentTurns(3).filter(
+    (turn) => !opportunityActivatedAt || turn.timestamp >= opportunityActivatedAt,
+  );
   const lastTurnSummary = lastTurns
     .map(
       (t) =>
         `[${t.timestamp}] ${t.inputSource || "self"}: ${t.thinking.slice(0, 200)}...`,
     )
     .join("\n");
+
+  const opportunityMode = Boolean(db.raw.prepare(
+    "SELECT 1 FROM goals WHERE status = 'active' AND strategy = 'opportunity-first-research-only' LIMIT 1",
+  ).get());
+
+  if (opportunityMode) {
+    return `You are waking in opportunity-first research mode. Historical turns from before this mode are intentionally excluded.
+
+Your active objective is to produce the first evidence-backed shortlist of legitimate, zero-upfront-cost, non-trading income opportunities that could realistically reach $20/day.
+
+Research and draft only. Do not contact anyone, create accounts, publish, spend money, make commitments, perform paid work, or use crypto/trading. Check the active plan and begin the concrete research task.`;
+  }
 
   return `You are waking up. You last went to sleep after ${turnCount} total turns.
 

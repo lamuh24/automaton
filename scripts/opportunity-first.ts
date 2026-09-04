@@ -157,7 +157,10 @@ function activateAgent(): Record<string, unknown> {
       db.prepare("DELETE FROM kv WHERE key = 'orchestrator.todo_md' OR key LIKE 'orchestrator.plan.%'").run();
       db.prepare(
         "INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES ('orchestrator.state', ?, datetime('now'))",
-      ).run(JSON.stringify({ phase: "idle", goalId: null, replanCount: 0, failedTaskId: null, failedError: null }));
+      ).run(JSON.stringify({ phase: "executing", goalId: goal.id, replanCount: 0, failedTaskId: null, failedError: null }));
+      db.prepare(
+        "INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES ('opportunity_first.activated_at', ?, datetime('now'))",
+      ).run(now);
       db.prepare("DELETE FROM kv WHERE key = 'sleep_until'").run();
 
       return {
