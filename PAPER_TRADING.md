@@ -2,6 +2,8 @@
 
 This workflow is strictly an educational, local simulation. It never connects an account, sends an order, accepts credentials, transfers funds, or guarantees a result. It reads public prices only from unauthenticated Kraken and Yahoo Finance endpoints.
 
+Simulated trades are locked during the opportunity-first stage. The lock opens only after the most recent seven calendar days each have at least $20 in creator-verified non-trading earnings and the creator separately supplies the approval phrase described in `OPPORTUNITY_FIRST.md`. Market snapshots and status remain read-only. Live trading is not implemented.
+
 The initial portfolio is $10,000 in virtual USD cash with no positions. It limits simulated activity to BTC, ETH, SOL, AAPL, MSFT, and TSLA; three simulated trades per day; $2,000 per simulated trade; 20% per asset; 40% total exposure; no leverage; and no shorting. A rationale is required for every simulated trade.
 
 Commands:

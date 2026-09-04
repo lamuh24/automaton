@@ -47,6 +47,7 @@
     "test:ci": "vitest run --reporter=verbose",
     "setup:local": "tsx scripts/bootstrap-local-profile.ts",
     "doctor:vm": "tsx scripts/verify-local-vm.ts",
+    "opportunity-first": "tsx scripts/opportunity-first.ts",
     "paper-trading:dashboard": "tsx scripts/paper-trading-dashboard.ts",
     "clean": "rm -rf dist && pnpm -r clean"
   },

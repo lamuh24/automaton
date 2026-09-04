@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { evaluateEarningsGate, type VerifiedEarning } from "../src/opportunities/earnings-gate.js";
 
 type Asset = "BTC" | "ETH" | "SOL" | "AAPL" | "MSFT" | "TSLA";
 type Side = "buy" | "sell";
@@ -46,6 +47,8 @@ const tradesPath = path.join(root, "trades.jsonl");
 const rationalePath = path.join(root, "rationale.jsonl");
 const snapshotPath = path.join(root, "market-snapshot.json");
 const historyPath = path.join(root, "portfolio-history.jsonl");
+const opportunityRoot = process.env.AUTOMATON_OPPORTUNITY_ROOT || path.join(os.homedir(), ".automaton", "opportunity-first");
+const earningsPath = path.join(opportunityRoot, "earnings.jsonl");
 const assets: Asset[] = ["BTC", "ETH", "SOL", "AAPL", "MSFT", "TSLA"];
 const cryptoAssets: Asset[] = ["BTC", "ETH", "SOL"];
 const stockAssets: Asset[] = ["AAPL", "MSFT", "TSLA"];
@@ -124,6 +127,18 @@ function readTrades(): Trade[] {
   return fs.readFileSync(tradesPath, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Trade);
 }
 
+function enforceOpportunityFirstGate(): void {
+  const earnings: VerifiedEarning[] = fs.existsSync(earningsPath)
+    ? fs.readFileSync(earningsPath, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as VerifiedEarning)
+    : [];
+  const gate = evaluateEarningsGate(earnings);
+  if (!gate.cryptoResearchUnlocked) {
+    throw new Error(
+      "Trading is locked by opportunity-first policy. Record at least $20 in creator-verified non-trading earnings on each of the last 7 days, then provide the separate creator approval phrase. See OPPORTUNITY_FIRST.md.",
+    );
+  }
+}
+
 function writeTrade(trade: Trade): void {
   fs.appendFileSync(tradesPath, `${JSON.stringify(trade)}\n`, "utf8");
 }
@@ -161,6 +176,7 @@ function parseAsset(value: string | undefined): Asset {
 }
 
 async function simulateTrade(side: Side, asset: Asset, amount: number, rationale: string): Promise<void> {
+  enforceOpportunityFirstGate();
   if (!rationale.trim()) throw new Error("A written rationale is required for every simulated trade");
   const portfolio = ensureInitialized();
   const prices = await refreshMarket();

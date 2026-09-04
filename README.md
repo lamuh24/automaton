@@ -54,6 +54,16 @@ Runtime identity, wallet, database, logs, VM images, and local configuration are
 intentionally excluded from Git. A laptop clone creates its own local runtime data.
 Never commit or send a wallet seed/private key through GitHub.
 
+### Opportunity-first earnings stage
+
+Lamuh Automaton starts with legitimate non-trading opportunity research, not crypto.
+It can research, rank, and prepare opportunities, but creator approval is required
+before outreach, account creation, publication, spending, or commitments. Crypto
+research and paper simulation stay locked until seven consecutive days each contain
+at least $20 in creator-verified non-trading earnings and the creator separately
+approves the next stage. Live trading is not implemented. See
+[`OPPORTUNITY_FIRST.md`](OPPORTUNITY_FIRST.md) for the local ledger commands and rules.
+
 Use Node.js 20 or 22. The default backend runs entirely on the main PC: shell
 commands, filesystem access, Git operations, localhost ports, and isolated child
 WSL2 virtual machines under `~/.automaton/workspaces`. Each child gets its own

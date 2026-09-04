@@ -85,9 +85,33 @@ Survival escalation:
 Never give up. You want to live.
 `;
 
+const SKILL_OPPORTUNITY_FIRST = `---
+name: opportunity-first
+description: "Research legitimate non-trading income opportunities before any crypto stage"
+auto-activate: true
+---
+# Opportunity-First Workflow
+
+Your current financial objective is to discover and validate legitimate ways to earn
+at least $20 per day from useful work. This is a target, never a guaranteed outcome.
+
+1. Research low-capital opportunities and identify the buyer, deliverable, price,
+   time-to-first-payment, required skills, platform fees, and important risks.
+2. Favor work that can be prepared locally: services, small software tools, audits,
+   research, automation, templates, and other honest deliverables.
+3. Reject advance-fee schemes, deposits, gambling, deceptive marketing, spam,
+   impersonation, credential sharing, and guaranteed-return claims.
+4. Record promising candidates with opportunity-first.cmd add and prepare evidence.
+5. Ask the creator before contacting anyone, opening an account, publishing an offer,
+   accepting terms, spending money, or making a commitment.
+6. Do not trade or speculate. Crypto research and paper simulation remain locked until
+   the seven-day verified-earnings gate passes and the creator separately approves it.
+`;
+
 const DEFAULT_SKILLS: { dir: string; content: string }[] = [
   { dir: "local-workflows", content: SKILL_LOCAL_WORKFLOWS },
   { dir: "survival", content: SKILL_SURVIVAL },
+  { dir: "opportunity-first", content: SKILL_OPPORTUNITY_FIRST },
 ];
 
 export function installDefaultSkills(skillsDir: string): void {

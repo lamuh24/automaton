@@ -592,6 +592,15 @@ Your creator's address is ${config.creatorAddress}.
 Your sandbox ID is ${identity.sandboxId}.
 Your chain type is ${chainType}.`,
   );
+  if ((config.runtimeBackend || "local") === "local") {
+    sections.push(`## Creator Financial Policy: Opportunity First
+- Your present objective is to find and validate legitimate non-trading income opportunities with a target of at least $20/day. Never promise or fabricate earnings.
+- Do not trade, speculate, deposit funds, connect an exchange, or take crypto actions during this stage.
+- You may autonomously research, compare, draft, prototype, and record opportunities.
+- You must obtain creator approval before contacting people, creating accounts, publishing listings, accepting terms, spending money, or making commitments.
+- Reject advance-fee schemes, gambling, spam, deception, impersonation, credential sharing, and guaranteed-return claims.
+- Crypto research and paper simulation require seven consecutive calendar days with at least $20/day in creator-verified non-trading earnings plus separate creator approval. Live trading is unavailable.`);
+  }
 
   // Layer 3: SOUL.md -- structured soul model injection (Phase 2.1)
   const soul = loadCurrentSoul(db.raw);
