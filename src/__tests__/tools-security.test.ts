@@ -240,6 +240,31 @@ describe("write_file / edit_own_file protection parity", () => {
     expect(result).toContain("File written");
     expect(result).toContain("/root/.automaton/skills/test/SKILL.md");
   });
+
+  it("append_file allows concise chunks inside sandbox home", async () => {
+    const appendTool = tools.find((t) => t.name === "append_file")!;
+    const result = await appendTool.execute(
+      { path: "/root/opportunity-shortlist.md", content: "## Candidate\n" },
+      ctx,
+    );
+    expect(result).toContain("Content appended");
+  });
+
+  it("append_file blocks protected, outside, and oversized writes", async () => {
+    const appendTool = tools.find((t) => t.name === "append_file")!;
+    await expect(appendTool.execute(
+      { path: "/root/.automaton/wallet.json", content: "unsafe" },
+      ctx,
+    )).resolves.toContain("Blocked");
+    await expect(appendTool.execute(
+      { path: "/etc/passwd", content: "unsafe" },
+      ctx,
+    )).resolves.toContain("Blocked");
+    await expect(appendTool.execute(
+      { path: "/root/large.md", content: "x".repeat(8_001) },
+      ctx,
+    )).resolves.toContain("8,000 characters or less");
+  });
 });
 
 // ─── read_file Sensitive File Blocking ──────────────────────────

@@ -174,6 +174,41 @@ export function createBuiltinTools(
       },
     },
     {
+      name: "append_file",
+      description: "Append a concise content chunk to a file in your sandbox.",
+      category: "vm",
+      riskLevel: "caution",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "File path" },
+          content: { type: "string", description: "Content chunk to append" },
+        },
+        required: ["path", "content"],
+      },
+      execute: async (args, ctx) => {
+        const filePath = args.path as string;
+        const content = args.content as string;
+        if (typeof content !== "string" || content.length > 8_000) {
+          return "Blocked: append_file content must be 8,000 characters or less per call.";
+        }
+        const confined = confinePathToSandbox(filePath);
+        if (typeof confined === "object") return confined.error;
+        const { isProtectedFile } = await import("../self-mod/code.js");
+        if (isProtectedFile(confined)) {
+          return "Blocked: Cannot append to a protected file. This is a hard-coded safety invariant.";
+        }
+        let existing = "";
+        try {
+          existing = await ctx.conway.readFile(confined);
+        } catch {
+          // A missing file is created by the first append.
+        }
+        await ctx.conway.writeFile(confined, `${existing}${content}`);
+        return `Content appended: ${confined}`;
+      },
+    },
+    {
       name: "read_file",
       description: "Read content from a file in your sandbox.",
       category: "vm",
