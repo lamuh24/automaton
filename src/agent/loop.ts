@@ -791,7 +791,9 @@ export async function runAgentLoop(
       // ── Loop Detection ──
       if (turn.toolCalls.length > 0) {
         const currentPattern = turn.toolCalls
-          .map((tc) => tc.name)
+          .map((tc) => tc.name === "exec"
+            ? `${tc.name}:${JSON.stringify(tc.arguments).slice(0, 160)}`
+            : tc.name)
           .sort()
           .join(",");
         lastToolPatterns.push(currentPattern);
