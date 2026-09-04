@@ -661,7 +661,7 @@ export async function runAgentLoop(
           sessionId: db.getKV("session_id") || "default",
           turnId: ulid(),
           tools: inferenceTools,
-          maxTokens: opportunityResearchMode ? 1_024 : undefined,
+          maxTokens: opportunityResearchMode ? 512 : undefined,
         },
         (msgs, opts) => inference.chat(msgs, { ...opts, tools: inferenceTools }),
       );

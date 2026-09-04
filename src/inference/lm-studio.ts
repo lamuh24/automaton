@@ -75,6 +75,8 @@ export async function ensureLocalGemmaReady(options?: {
       "--no-kv-offload",
       "--parallel", String(LOCAL_GEMMA_PARALLELISM),
       "--threads", String(Math.max(1, Math.min(10, os.cpus().length))),
+      "--reasoning", "off",
+      "--reasoning-budget", "0",
       "--jinja",
       "--no-webui",
     ], {
