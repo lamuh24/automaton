@@ -1,4 +1,4 @@
-export const DEFAULT_IDLE_SLEEP_MS = 15 * 60_000;
+export const DEFAULT_IDLE_SLEEP_MS = 10 * 60_000;
 
 export function getIdleSleepMs(value = process.env.AUTOMATON_IDLE_SLEEP_MS): number {
   const parsed = Number(value || DEFAULT_IDLE_SLEEP_MS);

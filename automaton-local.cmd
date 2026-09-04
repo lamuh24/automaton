@@ -28,7 +28,7 @@ if not exist "%~dp0node_modules\tsx\dist\cli.mjs" (
 if not defined AUTOMATON_VM_BACKEND set "AUTOMATON_VM_BACKEND=wsl"
 if not defined AUTOMATON_INFERENCE_URL set "AUTOMATON_INFERENCE_URL=http://127.0.0.1:1235"
 if not defined AUTOMATON_GEMMA_CONTEXT_LENGTH set "AUTOMATON_GEMMA_CONTEXT_LENGTH=24576"
-if not defined AUTOMATON_IDLE_SLEEP_MS set "AUTOMATON_IDLE_SLEEP_MS=900000"
+if not defined AUTOMATON_IDLE_SLEEP_MS set "AUTOMATON_IDLE_SLEEP_MS=600000"
 
 "%AUTOMATON_NODE_EXE%" "%~dp0node_modules\tsx\dist\cli.mjs" "%~dp0src\index.ts" %*
 exit /b %ERRORLEVEL%
